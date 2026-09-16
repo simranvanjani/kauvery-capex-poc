@@ -44,7 +44,7 @@
 dbutils.widgets.text("catalog", "kauvey_poc", "Catalog")
 dbutils.widgets.text("schema", "gold", "Schema")
 dbutils.widgets.text("model_name", "capex_worth_it", "Registered model name")
-dbutils.widgets.text("n_pos", "2200", "Number of historical POs to generate")
+dbutils.widgets.text("n_pos", "6000", "Number of historical POs to generate")
 
 CATALOG = dbutils.widgets.get("catalog").strip()
 SCHEMA = dbutils.widgets.get("schema").strip()
@@ -109,36 +109,61 @@ _NOW = datetime.now(timezone.utc)   # tz-aware: Spark Connect rejects tz-naive t
 
 # Equipment catalog: base INR price, price sigma, and brand -> models
 CATALOG_SPEC = {
-    "Patient Monitor":        {"base": 3.5e5,  "sigma": 0.25, "qty": (1, 12),
+    "Patient Monitor":        {"base": 3.5e5,  "sigma": 0.12, "qty": (1, 12),
         "brands": {"Philips": ["IntelliVue MX450", "IntelliVue MX550"], "GE Healthcare": ["B450", "B650"],
                    "Mindray": ["uMEC12", "BeneVision N12"], "Nihon Kohden": ["BSM-3562"]}},
-    "Ventilator":             {"base": 9.0e5,  "sigma": 0.22, "qty": (1, 6),
+    "Ventilator":             {"base": 9.0e5,  "sigma": 0.11, "qty": (1, 6),
         "brands": {"Draeger": ["Evita V600", "Evita V300"], "Hamilton": ["Hamilton C6"], "Philips": ["Trilogy Evo"]}},
-    "Infusion Pump":          {"base": 1.2e5,  "sigma": 0.20, "qty": (2, 20),
+    "Infusion Pump":          {"base": 1.2e5,  "sigma": 0.12, "qty": (2, 20),
         "brands": {"B Braun": ["Infusomat Space"], "Baxter": ["Sigma Spectrum"], "Mindray": ["BeneFusion"]}},
-    "Ultrasound":             {"base": 2.5e6,  "sigma": 0.22, "qty": (1, 3),
+    "Ultrasound":             {"base": 2.5e6,  "sigma": 0.10, "qty": (1, 3),
         "brands": {"GE Healthcare": ["Voluson E10", "LOGIQ E10"], "Philips": ["EPIQ Elite"], "Mindray": ["Resona R9"]}},
-    "Dialysis Machine":       {"base": 1.4e6,  "sigma": 0.18, "qty": (1, 8),
+    "Dialysis Machine":       {"base": 1.4e6,  "sigma": 0.10, "qty": (1, 8),
         "brands": {"Fresenius": ["4008S", "5008S"], "Nipro": ["Surdial X"]}},
-    "Anesthesia Workstation": {"base": 2.2e6,  "sigma": 0.20, "qty": (1, 4),
+    "Anesthesia Workstation": {"base": 2.2e6,  "sigma": 0.10, "qty": (1, 4),
         "brands": {"Draeger": ["Perseus A500"], "GE Healthcare": ["Aisys CS2"]}},
-    "Defibrillator":          {"base": 4.5e5,  "sigma": 0.25, "qty": (1, 6),
+    "Defibrillator":          {"base": 4.5e5,  "sigma": 0.12, "qty": (1, 6),
         "brands": {"Philips": ["HeartStart XL+"], "ZOLL": ["R Series"]}},
-    "CT Scanner":             {"base": 3.2e7,  "sigma": 0.18, "qty": (1, 1),
+    "CT Scanner":             {"base": 3.2e7,  "sigma": 0.08, "qty": (1, 1),
         "brands": {"GE Healthcare": ["Revolution CT 128", "Revolution ACT"], "Siemens": ["SOMATOM go.Top"], "Philips": ["Ingenuity CT 128"]}},
-    "MRI":                    {"base": 6.5e7,  "sigma": 0.15, "qty": (1, 1),
+    "MRI":                    {"base": 6.5e7,  "sigma": 0.07, "qty": (1, 1),
         "brands": {"Siemens": ["MAGNETOM Sola 1.5T"], "GE Healthcare": ["SIGNA Explorer 1.5T"], "Philips": ["Ingenia 1.5T"]}},
-    "Cath Lab":               {"base": 9.0e7,  "sigma": 0.15, "qty": (1, 1),
+    "Cath Lab":               {"base": 9.0e7,  "sigma": 0.07, "qty": (1, 1),
         "brands": {"Philips": ["Azurion 7"], "Siemens": ["ARTIS icono"], "GE Healthcare": ["Allia IGS 7"]}},
+}
+# Realistic, varied free-of-cost inclusions per equipment category (was a single placeholder string).
+FOC_BY_CAT = {
+    "Patient Monitor": ["SpO2 + NIBP consumables (1 yr), 2 spare probes, wall mount",
+                        "ECG lead sets + NIBP cuffs starter pack, mounting kit",
+                        "1 yr consumables + spare SpO2 sensor"],
+    "Ventilator": ["Breathing circuits (6 mo), test lung, 10 HEPA filters",
+                   "Reusable + disposable circuits starter set, calibration kit"],
+    "Infusion Pump": ["IV administration sets starter pack (500), pole clamp",
+                      "Dedicated giving sets (250) + battery pack"],
+    "Ultrasound": ["2 transducers of choice, gel warmer, thermal paper (1 yr)",
+                   "Extra linear probe, DICOM licence, applications training (3 days)"],
+    "Dialysis Machine": ["Dialysers + bloodlines starter (100), concentrate connectors",
+                         "1 yr consumables kit + spare Hansen connectors"],
+    "Anesthesia Workstation": ["Circle absorber + soda lime (1 yr), spare flow sensor",
+                               "Reusable circuits, gas sampling lines, calibration gas"],
+    "Defibrillator": ["Adult + paediatric pads (2 yr), spare battery",
+                      "Multifunction electrode pads starter pack, carry case"],
+    "CT Scanner": ["Contrast injector consumables (1 yr), phantom + QA kit, applications training",
+                   "Coil/detector service kit, 1 yr software updates, 5 training days"],
+    "MRI": ["RF coil set, cryogen top-up (1 yr), applications training (5 days)",
+            "Head + spine coils, DICOM licence, 1 yr software subscription"],
+    "Cath Lab": ["Radiation aprons set, contrast injector consumables, 5 applications training days",
+                 "Sterile drapes starter (200), 1 yr software updates, physicist QA kit"],
 }
 # frequency weights — small equipment purchased far more often than big iron
 CAT_WEIGHTS = {"Patient Monitor": .22, "Ventilator": .14, "Infusion Pump": .18, "Ultrasound": .10,
                "Dialysis Machine": .10, "Anesthesia Workstation": .08, "Defibrillator": .10,
                "CT Scanner": .04, "MRI": .02, "Cath Lab": .02}
 
-UNITS = ["Kauvery Chennai (Alwarpet)", "Kauvery Chennai (Radial Rd)", "Kauvery Trichy (Cantonment)",
-         "Kauvery Trichy (Tennur)", "Kauvery Hosur", "Kauvery Salem", "Kauvery Bengaluru (Electronic City)",
-         "Kauvery Tirunelveli", "Kauvery Karaikudi"]
+UNITS = ["Kauvery Chennai (Alwarpet)", "Kauvery Chennai (Radial Rd)", "Kauvery Chennai (Vadapalani)",
+         "Kauvery Trichy (Cantonment)", "Kauvery Trichy (Tennur)", "Kauvery Hosur", "Kauvery Salem",
+         "Kauvery Bengaluru (Electronic City)", "Kauvery Bengaluru (Marathahalli)", "Kauvery Tirunelveli",
+         "Kauvery Karaikudi", "Kauvery Chromepet", "Kauvery Tennur (Heart City)", "Kauvery Coimbatore"]
 VENDOR_SPEC = {
     "GE Healthcare": ("GEIN", "GEHEALTH@ge.com", "Rajesh Kumar"),
     "Philips India": ("PHIL", "sales@philips.co.in", "Anita Menon"),
@@ -170,7 +195,7 @@ po_numbers = [f"PO-{y}-{i:05d}" for i, y in enumerate(po_years)]
 rows = []
 for i in range(N_POS):
     y = int(po_years[i]); pod = po_dates[i]; unit = po_units[i]; pon = po_numbers[i]
-    inflation = 1.05 ** (y - 2015)
+    inflation = 1.03 ** (y - 2015)
     payment = np.random.choice(PAYMENT_TERMS, p=[.28, .22, .18, .12, .10, .10])
     header_disc = round(float(np.random.choice([0, 0, 2, 3, 5], p=[.5, .2, .12, .1, .08])), 2)
     for ln in range(int(line_counts[i])):
@@ -180,7 +205,7 @@ for i in range(N_POS):
         model = np.random.choice(spec["brands"][brand])
         vendor = BRAND_TO_VENDOR.get(brand, "Medingenious Solutions")
         vcode, vemail, vcontact = VENDOR_SPEC[vendor]
-        brand_premium = 1.10 if brand in ("Philips", "GE Healthcare", "Siemens") else 0.96
+        brand_premium = 1.05 if brand in ("Philips", "GE Healthcare", "Siemens") else 0.97
         unit_rate = float(spec["base"] * inflation * brand_premium * np.random.lognormal(0, spec["sigma"]))
         unit_rate = round(unit_rate, 2)
         qty = int(np.random.randint(spec["qty"][0], spec["qty"][1] + 1))
@@ -220,7 +245,7 @@ for i in range(N_POS):
             "warranty_months": warranty, "warranty_raw": f"{warranty} months comprehensive",
             "amc_value": (f"{np.random.choice([5,7,8,10])}% of value per annum for 5 years" if has_amc else None),
             "camc_value": (f"{np.random.choice([8,10,12])}% of value per annum" if has_camc else None),
-            "foc_details": ("Starter consumables + accessories kit" if has_foc else None),
+            "foc_details": (str(np.random.choice(FOC_BY_CAT.get(cat, ["Starter consumables + accessories kit"]))) if has_foc else None),
             "foc_value": (round(float(unit_rate * np.random.uniform(0.01, 0.04)), 2) if has_foc else None),
             "camc_amc_start_date": ((pod + timedelta(days=warranty*30)).strftime("%d/%m/%y") if has_amc else None),
             "camc_amc_end_date": ((pod + timedelta(days=warranty*30 + 1825)).strftime("%d/%m/%y") if has_amc else None),
@@ -509,7 +534,7 @@ FEATURE_COLS = ["price_variance_pct", "warranty_delta_months", "amc_camc_present
 MODEL_INPUT_COLS = ["item_description", "make_brand", "model_no", "qty", "unit_rate", "warranty_months",
                     "amc_present", "camc_present", "foc_present", "delivery_lead_days", "payment_terms",
                     "has_training", "has_installation"]
-WEIGHTS = {"price": 30, "warranty": 15, "amc_camc": 15, "delivery": 10, "foc": 10, "frequency": 10, "payment": 10}
+WEIGHTS = {"price": 50, "warranty": 30, "amc_camc": 8, "foc": 5, "delivery": 3, "frequency": 2, "payment": 2}
 
 CATEGORY_KEYWORDS = {
     "CT Scanner": ["ct scanner", "somatom", "revolution ct", "ingenuity ct", "128 slice", "128-slice"],
@@ -658,13 +683,18 @@ class CapexWorthItModel(mlflow.pyfunc.PythonModel):
             X = pd.DataFrame([[feats[c] for c in FEATURE_COLS]], columns=FEATURE_COLS)
             score = float(max(0.0, min(100.0, self._model.predict(X)[0])))
             gaps = detect_gaps(row, info["category"], self._bom, self._examples)
+            verdict = verdict_from_score(score)
+            # A cheap price shouldn't auto-Accept a quote that is missing essentials (warranty/AMC):
+            # a High-severity gap means there is always something to negotiate first.
+            if verdict == "Accept" and any(g.get("severity") == "High" for g in gaps):
+                verdict = "Negotiate"
             out.append({"item_description": row.get("item_description"), "make_brand": row.get("make_brand"),
                         "model_no": row.get("model_no"), "category": info["category"],
                         "match_level": info["match_level"], "benchmark_unit_rate": info["benchmark_unit_rate"],
                         "benchmark_po": info["benchmark_po"], "benchmark_po_date": info["benchmark_po_date"],
                         "quoted_unit_rate": float(row.get("unit_rate") or 0.0),
                         "price_variance_pct": round(feats["price_variance_pct"] * 100, 1),
-                        "worth_score": round(score, 1), "verdict": verdict_from_score(score),
+                        "worth_score": round(score, 1), "verdict": verdict,
                         "num_gaps": len(gaps), "gaps_json": json.dumps(gaps)})
         return pd.DataFrame(out)
 

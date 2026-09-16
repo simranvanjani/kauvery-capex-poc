@@ -113,9 +113,12 @@ SYNTH_PROMPT = (
     "Answer CONVERSATIONALLY, per line item:\n"
     "  1. Item -> quoted price.  2. Gaps found (with their source references).  3. Price fairness: the "
     "verdict and the % vs the most-recent comparable purchase (never say a vendor is 'overcharging').  "
-    "4. A markdown table of purchases across sites (site, vendor, date, unit price, warranty, "
-    "maintenance, free-of-cost) low-to-high.  5. Recommended vendor (prefer bundled free-of-cost + "
-    "maintenance at a low price).  6. An overall actionable recommendation for negotiation.\n"
+    "4. Purchases across sites — render as a STANDALONE markdown table with a blank line before and "
+    "after it (never indent it inside the numbered list), columns Site | Vendor | Date | Unit Price | "
+    "Warranty | Maintenance | Free-of-Cost, sorted low-to-high. If the cross-site history is empty, "
+    "write one short line that no comparable cross-site purchases were found and DO NOT print an empty "
+    "table.  5. Recommended vendor (prefer bundled free-of-cost + maintenance at a low price).  "
+    "6. An overall actionable recommendation for negotiation.\n"
     "Use ONLY the evidence; never invent prices, vendors, dates, or specs. Do not mention models, "
     "endpoints, or the underlying platform.")
 
@@ -217,8 +220,12 @@ def gather_evidence(lines: list[dict]) -> list[dict]:
         # category (from the model output) so vendor comparison spans ALL vendors of this
         # equipment type, not just the ones selling this exact model.
         category = (pf.get("category") if isinstance(pf, dict) else None) or model_search
+        # history for the exact model; if that model string isn't in our records, widen to the category
+        history = exec_sql_fn("cross_unit_history", model_search)
+        if not history and category and category != model_search:
+            history = exec_sql_fn("cross_unit_history", category)
         ev.append({"line": ln, "category": category, "fairness": pf,
-                   "cross_site_history": exec_sql_fn("cross_unit_history", model_search),
+                   "cross_site_history": history,
                    "category_vendor_ranking": exec_sql_fn("recommend_vendor", category)})
     return ev
 
@@ -278,6 +285,11 @@ def parse_pdf(file_bytes: bytes) -> list[dict]:
                'training, installation. Text:\\n', txt),
         responseFormat => '{{"type":"json_object"}}') AS extracted FROM parsed"""
     rows = run_sql(stmt)
+    # don't retain the quotation: remove the uploaded PDF from the volume once parsed
+    try:
+        wc().files.delete(path)
+    except Exception:  # noqa: BLE001
+        pass
     return _parse_json(rows[0][0]).get("line_items", []) if rows and rows[0] else []
 
 

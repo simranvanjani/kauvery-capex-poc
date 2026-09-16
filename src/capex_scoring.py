@@ -1,9 +1,8 @@
 """Kauvery CAPEX Phase 2 — core scoring & gap-detection logic.
 
-This is the exact module the notebook writes at runtime and logs WITH the MLflow
-model (Models-from-Code), so it is what runs inside the serving endpoint.
-The notebook (notebooks/capex_phase2_demo.py) is the source of truth; this file is
-the readable, version-controlled copy.
+Exact module the notebook writes at runtime and logs WITH the MLflow model, so it is what runs
+in the serving endpoint. Weights follow the customer rubric (price 50 / warranty 30 / rest);
+a High-severity gap prevents an automatic Accept.
 """
 import json
 import numpy as np
@@ -16,7 +15,7 @@ FEATURE_COLS = ["price_variance_pct", "warranty_delta_months", "amc_camc_present
 MODEL_INPUT_COLS = ["item_description", "make_brand", "model_no", "qty", "unit_rate", "warranty_months",
                     "amc_present", "camc_present", "foc_present", "delivery_lead_days", "payment_terms",
                     "has_training", "has_installation"]
-WEIGHTS = {"price": 30, "warranty": 15, "amc_camc": 15, "delivery": 10, "foc": 10, "frequency": 10, "payment": 10}
+WEIGHTS = {"price": 50, "warranty": 30, "amc_camc": 8, "foc": 5, "delivery": 3, "frequency": 2, "payment": 2}
 
 CATEGORY_KEYWORDS = {
     "CT Scanner": ["ct scanner", "somatom", "revolution ct", "ingenuity ct", "128 slice", "128-slice"],
@@ -165,13 +164,18 @@ class CapexWorthItModel(mlflow.pyfunc.PythonModel):
             X = pd.DataFrame([[feats[c] for c in FEATURE_COLS]], columns=FEATURE_COLS)
             score = float(max(0.0, min(100.0, self._model.predict(X)[0])))
             gaps = detect_gaps(row, info["category"], self._bom, self._examples)
+            verdict = verdict_from_score(score)
+            # A cheap price shouldn't auto-Accept a quote that is missing essentials (warranty/AMC):
+            # a High-severity gap means there is always something to negotiate first.
+            if verdict == "Accept" and any(g.get("severity") == "High" for g in gaps):
+                verdict = "Negotiate"
             out.append({"item_description": row.get("item_description"), "make_brand": row.get("make_brand"),
                         "model_no": row.get("model_no"), "category": info["category"],
                         "match_level": info["match_level"], "benchmark_unit_rate": info["benchmark_unit_rate"],
                         "benchmark_po": info["benchmark_po"], "benchmark_po_date": info["benchmark_po_date"],
                         "quoted_unit_rate": float(row.get("unit_rate") or 0.0),
                         "price_variance_pct": round(feats["price_variance_pct"] * 100, 1),
-                        "worth_score": round(score, 1), "verdict": verdict_from_score(score),
+                        "worth_score": round(score, 1), "verdict": verdict,
                         "num_gaps": len(gaps), "gaps_json": json.dumps(gaps)})
         return pd.DataFrame(out)
 
