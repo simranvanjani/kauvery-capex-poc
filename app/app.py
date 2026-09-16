@@ -13,7 +13,8 @@ import streamlit as st
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.serving import ChatMessage, ChatMessageRole
 
-st.set_page_config(page_title="CAPEX Quotation Assistant", page_icon="📋", layout="wide")
+st.set_page_config(page_title="CAPEX Quotation Assistant", page_icon="📋", layout="centered",
+                   initial_sidebar_state="collapsed")
 
 # ---- runtime config (kept out of the UI) ----
 import os
@@ -126,13 +127,25 @@ FOLLOWUP_PROMPT = (
     "to upload one. If asked to draft a vendor letter, write a short professional letter citing the "
     "specific missing items. Never mention models, endpoints, or the underlying platform.")
 
-EXTRACT_PROMPT = (
-    "Extract quotation line items from the user's message as a JSON object with key 'line_items' = array "
-    "of {item_description, make_brand, model_no, qty (int), unit_rate (number), warranty_months (int), "
-    "amc_present (bool), foc_present (bool), delivery_lead_days (int), payment_terms (string), "
-    "has_training (bool), has_installation (bool)}. Booleans reflect whether the quote includes "
-    "maintenance (AMC/CMC), free-of-cost items, training, installation. If the message is a general "
-    "question (not a quotation), return {\"line_items\": []}. Return ONLY the JSON object.")
+ROUTE_PROMPT = (
+    "You route messages for a hospital procurement assistant. Return ONLY a JSON object with two keys:\n"
+    " - line_items: array of {item_description, make_brand, model_no, qty (int), unit_rate (number), "
+    "warranty_months (int), amc_present (bool), foc_present (bool), delivery_lead_days (int), "
+    "payment_terms (string), has_training (bool), has_installation (bool)} — fill ONLY when the user is "
+    "giving a specific quotation to evaluate (it has a price). Booleans reflect whether the quote "
+    "includes maintenance (AMC/CMC), free-of-cost items, training, installation.\n"
+    " - search_terms: array of short item/brand/model keywords to look up when the user asks a general "
+    "question about pricing, vendors, or trends (e.g. [\"patient monitor\"] or [\"CT scanner\"]).\n"
+    "A quotation -> fill line_items, empty search_terms. A data question -> fill search_terms, empty "
+    "line_items. A general follow-up (draft a letter, thanks, etc.) -> both empty. Return ONLY JSON.")
+
+DATAQ_PROMPT = (
+    "You are a procurement-intelligence assistant for a hospital group's capex team. Answer the user's "
+    "question using the EVIDENCE (JSON) below — purchase history across sites (prices, warranty, "
+    "maintenance, free-of-cost) and vendor value rankings for the relevant items. Be concise and "
+    "management-oriented: surface price ranges/trends, cheapest vs most-recent, and the best-value "
+    "vendor; use a small markdown table or bullets. Use ONLY the evidence; never invent data, and never "
+    "mention models, endpoints, or the underlying platform.")
 
 _ROLE = {"system": ChatMessageRole.SYSTEM, "user": ChatMessageRole.USER,
          "assistant": ChatMessageRole.ASSISTANT}
@@ -204,28 +217,40 @@ def gather_evidence(lines: list[dict]) -> list[dict]:
     return ev
 
 
+def route(text: str):
+    """Classify a message -> (line_items to evaluate, search_terms for a data question)."""
+    try:
+        j = _parse_json(_chat([{"role": "system", "content": ROUTE_PROMPT},
+                               {"role": "user", "content": text}], max_tokens=700))
+        return (j.get("line_items") or []), (j.get("search_terms") or [])
+    except Exception:  # noqa: BLE001
+        return [], []
+
+
 def handle_turn(user_text: str, pending_lines) -> str:
-    lines = pending_lines if pending_lines is not None else extract_line_items(user_text)
     hist = [{"role": m["role"], "content": m["content"]} for m in st.session_state.history]
-    if lines:
+    lines, terms = (pending_lines, []) if pending_lines is not None else route(user_text)
+
+    if lines:  # a quotation to evaluate
         evidence = gather_evidence(lines)
         st.session_state.evidence = evidence
         msgs = [{"role": "system", "content": SYNTH_PROMPT}] + hist + [
             {"role": "user", "content": f"{user_text}\n\nEVIDENCE:\n{json.dumps(evidence, default=str)}"}]
         return _chat(msgs)
+
+    if terms:  # a general data question about an item / vendor / trend
+        ev = [{"search": t, "cross_site_history": exec_sql_fn("cross_unit_history", t),
+               "vendor_ranking": exec_sql_fn("recommend_vendor", t)} for t in terms[:3]]
+        st.session_state.evidence = ev
+        msgs = [{"role": "system", "content": DATAQ_PROMPT}] + hist + [
+            {"role": "user", "content": f"{user_text}\n\nEVIDENCE:\n{json.dumps(ev, default=str)}"}]
+        return _chat(msgs)
+
+    # general follow-up — use whatever evidence is already on the table
     ev = st.session_state.get("evidence", [])
     msgs = [{"role": "system", "content": FOLLOWUP_PROMPT}] + hist + [
         {"role": "user", "content": f"{user_text}\n\nEVIDENCE:\n{json.dumps(ev, default=str)}"}]
     return _chat(msgs)
-
-
-def extract_line_items(text: str) -> list[dict]:
-    try:
-        out = _chat([{"role": "system", "content": EXTRACT_PROMPT}, {"role": "user", "content": text}],
-                    max_tokens=800)
-        return _parse_json(out).get("line_items", [])
-    except Exception:  # noqa: BLE001
-        return []
 
 
 def parse_pdf(file_bytes: bytes) -> list[dict]:
@@ -263,50 +288,29 @@ st.markdown(CSS, unsafe_allow_html=True)
 if "history" not in st.session_state:
     st.session_state.history = []
 
-st.title("📋 CAPEX Quotation Assistant")
-st.markdown("Evaluate equipment quotes with confidence, based on your organisation's own purchase history.")
-
+# Slim, collapsed-by-default sidebar: new conversation + a tucked-away decision recorder.
 with st.sidebar:
-    st.header("Upload your quotation")
-    up = st.file_uploader("Vendor quotation PDF", type=["pdf"],
-                          help="Drop a PDF of the vendor quote and we'll read it for you.")
-    if up is not None and st.button("Analyze quotation", type="primary", use_container_width=True):
-        with st.spinner("Reading your quotation…"):
-            try:
-                lines = parse_pdf(up.getvalue())
-            except Exception:  # noqa: BLE001
-                lines = []
-                st.warning("Couldn't read that file automatically — describe the item in the chat instead.")
-        if lines:
-            names = ", ".join(f"{l.get('qty','')}× {l.get('item_description','item')}" for l in lines)
-            st.session_state.pending_lines = lines
-            st.session_state.pending_text = f"Please review this quotation: {names}."
-            st.success(f"Read {len(lines)} item(s) from your quotation.")
-
-    st.divider()
-    st.header("Save your final decision")
-    st.caption("Record what you decided — only the final choice is kept, not the quotation.")
-    with st.form("decision"):
-        d_item = st.text_input("Item"); d_vendor = st.text_input("Chosen vendor")
-        d_price = st.number_input("Agreed unit price (INR)", min_value=0.0, step=1000.0)
-        d_note = st.text_area("Rationale", height=70)
-        if st.form_submit_button("Save decision") and d_item and d_vendor:
-            try:
-                save_decision(d_item, d_vendor, d_price, d_note)
-                st.success("Saved — only your final decision is kept; the quotation stays private.")
-            except Exception as e:  # noqa: BLE001
-                st.error(f"Could not save: {e}")
-
-    st.divider()
-    if st.button("Draft a negotiation letter", use_container_width=True):
-        st.session_state.pending_text = ("Draft a short professional letter to the vendor asking them to "
-                                         "clarify or include the missing items you identified.")
-    if st.button("Clear conversation", use_container_width=True):
+    if st.button("＋ New conversation", use_container_width=True):
         st.session_state.history = []
         st.session_state.pop("evidence", None)
         st.rerun()
+    with st.expander("Record final decision"):
+        with st.form("decision"):
+            d_item = st.text_input("Item"); d_vendor = st.text_input("Chosen vendor")
+            d_price = st.number_input("Agreed unit price (INR)", min_value=0.0, step=1000.0)
+            d_note = st.text_area("Rationale", height=70)
+            if st.form_submit_button("Save decision") and d_item and d_vendor:
+                try:
+                    save_decision(d_item, d_vendor, d_price, d_note)
+                    st.success("Saved — only the final decision is kept, not the quotation.")
+                except Exception as e:  # noqa: BLE001
+                    st.error(f"Could not save: {e}")
 
-# empty state + example chips
+st.title("📋 CAPEX Quotation Assistant")
+st.markdown("Ask about an instrument, a vendor, or a price trend — or attach a quotation to compare it "
+            "against your purchase history.")
+
+# empty state: quiet welcome + suggested-question pills
 if not st.session_state.history:
     st.markdown(f'<div class="welcome">{WELCOME}</div>', unsafe_allow_html=True)
     st.caption("Try asking")
@@ -320,16 +324,41 @@ for m in st.session_state.history:
     with st.chat_message(m["role"], avatar="📋" if m["role"] == "assistant" else "🧑‍⚕️"):
         st.markdown(m["content"])
 
-prompt = st.chat_input("Ask about this quote… e.g. \"Is this fair?\", \"What's missing?\"")
-pending_lines = None
-if not prompt and st.session_state.get("pending_text"):
+# Single Genie-style input: type a question, or use the paperclip to attach a quotation PDF.
+ci = st.chat_input("Message the assistant — or attach a quotation PDF", accept_file=True, file_type=["pdf"])
+
+prompt, files, pending_lines = None, [], None
+if ci is not None:
+    if isinstance(ci, str):                      # older Streamlit: plain text only
+        prompt = ci.strip()
+    else:                                        # ChatInputValue: .text + .files
+        prompt = (getattr(ci, "text", "") or "").strip()
+        files = list(getattr(ci, "files", []) or [])
+elif st.session_state.get("pending_text"):       # a suggestion chip was clicked
     prompt = st.session_state.pop("pending_text")
     pending_lines = st.session_state.pop("pending_lines", None)
 
+# An attached PDF becomes a quotation to review.
+attach_note = ""
+if files:
+    with st.spinner("Reading your quotation…"):
+        try:
+            lines = parse_pdf(files[0].getvalue())
+        except Exception:  # noqa: BLE001
+            lines = []
+    if lines:
+        pending_lines = lines
+        names = ", ".join(f"{l.get('qty','')}× {l.get('item_description','item')}" for l in lines)
+        attach_note = f"📎 {files[0].name}"
+        prompt = prompt or f"Please review this quotation: {names}."
+    else:
+        prompt = prompt or "I attached a quotation but it couldn't be read automatically."
+
 if prompt:
-    st.session_state.history.append({"role": "user", "content": prompt})
+    shown = f"{attach_note}\n\n{prompt}" if attach_note else prompt
+    st.session_state.history.append({"role": "user", "content": shown})
     with st.chat_message("user", avatar="🧑‍⚕️"):
-        st.markdown(prompt)
+        st.markdown(shown)
     with st.chat_message("assistant", avatar="📋"):
         with st.spinner("Comparing against your purchase history…"):
             try:
