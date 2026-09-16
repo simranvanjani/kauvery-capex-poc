@@ -209,14 +209,17 @@ def exec_sql_fn(fn: str, search: str):
 def gather_evidence(lines: list[dict]) -> list[dict]:
     ev = []
     for ln in lines:
-        search = ln.get("model_no") or ln.get("item_description") or ""
+        model_search = ln.get("model_no") or ln.get("item_description") or ""
         try:
             pf = exec_price_fairness(**ln)
         except Exception as e:  # noqa: BLE001
             pf = {"error": str(e)}
-        ev.append({"line": ln, "fairness": pf,
-                   "cross_site_history": exec_sql_fn("cross_unit_history", search),
-                   "vendor_ranking": exec_sql_fn("recommend_vendor", search)})
+        # category (from the model output) so vendor comparison spans ALL vendors of this
+        # equipment type, not just the ones selling this exact model.
+        category = (pf.get("category") if isinstance(pf, dict) else None) or model_search
+        ev.append({"line": ln, "category": category, "fairness": pf,
+                   "cross_site_history": exec_sql_fn("cross_unit_history", model_search),
+                   "category_vendor_ranking": exec_sql_fn("recommend_vendor", category)})
     return ev
 
 
