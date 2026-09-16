@@ -133,10 +133,14 @@ ROUTE_PROMPT = (
     "payment_terms (string), has_training (bool), has_installation (bool)} — fill ONLY when the user is "
     "giving a specific quotation to evaluate (it has a price). Booleans reflect whether the quote "
     "includes maintenance (AMC/CMC), free-of-cost items, training, installation.\n"
-    " - search_terms: array of short item/brand/model keywords to look up when the user asks a general "
-    "question about pricing, vendors, or trends (e.g. [\"patient monitor\"] or [\"CT scanner\"]).\n"
-    "A quotation -> fill line_items, empty search_terms. A data question -> fill search_terms, empty "
-    "line_items. A general follow-up (draft a letter, thanks, etc.) -> both empty. Return ONLY JSON.")
+    " - search_terms: EQUIPMENT names only (item / brand / model), e.g. [\"patient monitor\"], "
+    "[\"ventilator\"], [\"GE CT\"]. Use this ONLY when the user names a NEW piece of equipment to look "
+    "up. NEVER put attributes here (foc, free-of-cost, amc, maintenance, warranty, price, training, "
+    "delivery, payment, vendor, unit/site).\n"
+    "Rules: a quotation -> line_items only. A question naming a NEW equipment type -> search_terms only. "
+    "Anything about the quotation/items already discussed, or about an attribute of them (e.g. 'which "
+    "site has the best FOC', 'compare their warranties', 'draft a letter') -> BOTH arrays empty (it's a "
+    "follow-up answered from existing data). Return ONLY the JSON object.")
 
 DATAQ_PROMPT = (
     "You are a procurement-intelligence assistant for a hospital group's capex team. Answer the user's "
@@ -237,13 +241,15 @@ def handle_turn(user_text: str, pending_lines) -> str:
             {"role": "user", "content": f"{user_text}\n\nEVIDENCE:\n{json.dumps(evidence, default=str)}"}]
         return _chat(msgs)
 
-    if terms:  # a general data question about an item / vendor / trend
+    if terms:  # a data question naming an equipment type
         ev = [{"search": t, "cross_site_history": exec_sql_fn("cross_unit_history", t),
                "vendor_ranking": exec_sql_fn("recommend_vendor", t)} for t in terms[:3]]
-        st.session_state.evidence = ev
-        msgs = [{"role": "system", "content": DATAQ_PROMPT}] + hist + [
-            {"role": "user", "content": f"{user_text}\n\nEVIDENCE:\n{json.dumps(ev, default=str)}"}]
-        return _chat(msgs)
+        if any(r["cross_site_history"] or r["vendor_ranking"] for r in ev):
+            st.session_state.evidence = ev
+            msgs = [{"role": "system", "content": DATAQ_PROMPT}] + hist + [
+                {"role": "user", "content": f"{user_text}\n\nEVIDENCE:\n{json.dumps(ev, default=str)}"}]
+            return _chat(msgs)
+        # nothing matched (e.g. mis-routed attribute) -> answer from existing evidence below
 
     # general follow-up — use whatever evidence is already on the table
     ev = st.session_state.get("evidence", [])
