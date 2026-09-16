@@ -26,76 +26,80 @@ VOLUME_PATH = f"/Volumes/{CATALOG}/{SCHEMA}/landing"
 DECISIONS_TABLE = f"{CATALOG}.{SCHEMA}.purchase_decisions"
 
 WELCOME = (
-    "👋 **Welcome to your equipment procurement partner.** Upload a vendor quotation on the left "
-    "(or just describe it in the chat), and I'll evaluate whether the price is fair, flag any missing "
-    "items, compare it against your organisation's past purchases across sites, and suggest how to "
-    "negotiate. Your quotation data stays private and in your control.")
+    "👋 <b>Welcome.</b> Upload a vendor quotation on the left — or just describe it in the chat — and "
+    "I'll tell you whether the price is fair, flag anything missing, compare it against your past "
+    "purchases across sites, and suggest how to negotiate. Your quotation data stays private and in "
+    "your control.")
 
 CHIPS = ["Is this price fair?", "Which vendor should we pick?",
          "What's missing from this quote?", "Show cross-site prices"]
 
 CSS = """
 <style>
+/* Genie-style: restrained neutral surfaces, one calm blue accent, readable everywhere. */
 :root{
-  --accent:#2DD4BF; --accent2:#38BDF8; --bg:#0F1419; --surface:#1B2431; --surface2:#232E3D;
-  --text:#F3F4F6; --muted:#9AA7B4; --border:rgba(148,163,184,.16); --radius:14px;
+  --bg:#0E1117; --surface:#161A21; --surface2:#1C222B; --border:#2A313C;
+  --text:#E6E8EB; --muted:#8B95A3; --accent:#4C8DFF; --accent-weak:rgba(76,141,255,.12);
+  --radius:12px;
 }
 [data-testid="stAppViewContainer"]{background:var(--bg);color:var(--text);
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif;}
-.block-container{padding-top:2rem;padding-bottom:6rem;max-width:1050px;}
-h1{font-size:2rem;font-weight:700;letter-spacing:-.5px;color:var(--text);margin-bottom:.25rem;}
-h2,h3{color:var(--text);font-weight:600;letter-spacing:-.3px;}
+.block-container{padding-top:2.4rem;padding-bottom:7rem;max-width:840px;}
+h1{font-size:1.55rem;font-weight:650;letter-spacing:-.2px;color:var(--text);margin-bottom:.2rem;}
+h2,h3{color:var(--text);font-weight:600;}
 p{color:var(--muted);line-height:1.6;}
-footer, [data-testid="stToolbar"]{display:none;}
+footer,[data-testid="stToolbar"]{display:none;}
 
 /* sidebar */
 [data-testid="stSidebar"]{background:var(--surface);border-right:1px solid var(--border);}
 [data-testid="stSidebar"] h1,[data-testid="stSidebar"] h2,[data-testid="stSidebar"] h3{
-  font-size:1rem;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);}
+  font-size:.72rem;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:600;}
 
 /* file uploader */
-[data-testid="stFileUploaderDropzone"]{background:var(--surface2);border:2px dashed var(--border);
-  border-radius:var(--radius);transition:all .2s ease;}
-[data-testid="stFileUploaderDropzone"]:hover{border-color:var(--accent);
-  background:rgba(45,212,191,.06);}
+[data-testid="stFileUploaderDropzone"]{background:var(--surface2);border:1px dashed var(--border);
+  border-radius:var(--radius);transition:all .15s ease;}
+[data-testid="stFileUploaderDropzone"]:hover{border-color:var(--accent);background:var(--accent-weak);}
 
-/* chat bubbles — robust card style for both roles, accent rail on the left */
-[data-testid="stChatMessage"]{background:var(--surface);border:1px solid var(--border);
-  border-left:3px solid var(--accent);border-radius:var(--radius);padding:1rem 1.15rem;
-  margin-bottom:.9rem;box-shadow:0 1px 2px rgba(0,0,0,.35);}
-[data-testid="stChatMessage"] .stMarkdown{color:var(--text);line-height:1.6;}
-[data-testid="stChatMessage"] table{width:100%;border-collapse:collapse;font-size:.86rem;}
+/* chat — clean thread, no loud bubbles */
+[data-testid="stChatMessage"]{background:transparent;border:none;border-bottom:1px solid var(--border);
+  border-radius:0;padding:1rem .25rem;margin:0;box-shadow:none;}
+[data-testid="stChatMessage"] .stMarkdown{color:var(--text);line-height:1.65;}
+[data-testid="stChatMessage"] table{width:100%;border-collapse:collapse;font-size:.85rem;margin:.5rem 0;}
 [data-testid="stChatMessage"] th,[data-testid="stChatMessage"] td{
-  border:1px solid var(--border);padding:.4rem .55rem;text-align:left;}
-[data-testid="stChatMessage"] th{background:rgba(56,189,248,.12);}
+  border:1px solid var(--border);padding:.4rem .6rem;text-align:left;}
+[data-testid="stChatMessage"] th{background:var(--surface2);color:var(--text);font-weight:600;}
 
-/* chat input */
-[data-testid="stChatInput"]{background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--radius);box-shadow:0 6px 20px rgba(0,0,0,.35);}
+/* chat input — clean rounded bar */
+[data-testid="stChatInput"]{background:var(--surface2);border:1px solid var(--border);
+  border-radius:14px;box-shadow:0 4px 16px rgba(0,0,0,.3);}
 [data-testid="stChatInput"]:focus-within{border-color:var(--accent);
-  box-shadow:0 0 0 2px rgba(45,212,191,.25);}
+  box-shadow:0 0 0 2px var(--accent-weak);}
 [data-testid="stChatInput"] textarea::placeholder{color:var(--muted);}
 
-/* buttons */
-.stButton>button{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#04201c;
-  font-weight:600;border:none;border-radius:12px;padding:.6rem 1.1rem;transition:all .2s ease;
-  box-shadow:0 4px 12px rgba(0,0,0,.35);}
-.stButton>button:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(45,212,191,.25);
-  color:#04201c;}
+/* primary button (Analyze) — solid accent, white text */
+button[kind="primary"],button[kind="primaryFormSubmit"]{background:var(--accent);color:#fff;
+  border:none;border-radius:10px;font-weight:600;box-shadow:none;}
+button[kind="primary"]:hover,button[kind="primaryFormSubmit"]:hover{background:#3B7BEE;color:#fff;}
+
+/* default buttons (chips, sidebar actions) — subtle outlined pills, readable */
+.stButton>button{background:var(--surface2);color:var(--text);border:1px solid var(--border);
+  border-radius:10px;font-weight:500;transition:all .15s ease;box-shadow:none;padding:.5rem 1rem;}
+.stButton>button:hover{background:var(--accent-weak);border-color:var(--accent);color:var(--text);}
 [data-testid="stSidebar"] .stButton>button{width:100%;}
 
 /* inputs */
 input,textarea{background:var(--surface2)!important;color:var(--text)!important;
   border:1px solid var(--border)!important;border-radius:10px!important;}
-input:focus,textarea:focus{border-color:var(--accent)!important;
-  box-shadow:0 0 0 2px rgba(45,212,191,.2)!important;}
+input:focus,textarea:focus{border-color:var(--accent)!important;box-shadow:0 0 0 2px var(--accent-weak)!important;}
 
-/* alerts */
-[data-testid="stAlert"]{border-radius:12px;border-left:4px solid var(--accent);}
+/* welcome card */
+.welcome{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:1.1rem 1.25rem;color:var(--muted);line-height:1.6;margin:.5rem 0 1rem;}
+.welcome b{color:var(--text);}
 
 ::-webkit-scrollbar{width:9px;height:9px;}
-::-webkit-scrollbar-thumb{background:rgba(148,163,184,.3);border-radius:5px;}
-::-webkit-scrollbar-thumb:hover{background:rgba(148,163,184,.55);}
+::-webkit-scrollbar-thumb{background:rgba(139,149,163,.3);border-radius:5px;}
+::-webkit-scrollbar-thumb:hover{background:rgba(139,149,163,.55);}
 </style>
 """
 
@@ -304,7 +308,8 @@ with st.sidebar:
 
 # empty state + example chips
 if not st.session_state.history:
-    st.info(WELCOME)
+    st.markdown(f'<div class="welcome">{WELCOME}</div>', unsafe_allow_html=True)
+    st.caption("Try asking")
     cols = st.columns(len(CHIPS))
     for c, chip in zip(cols, CHIPS):
         if c.button(chip, use_container_width=True):
