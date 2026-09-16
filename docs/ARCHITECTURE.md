@@ -70,6 +70,27 @@ functions, and adds multi-turn conversation.
   then improves past the hand-tuned rubric. Weights are a single dict in `src/capex_scoring.py` (`WEIGHTS`).
 - **Deterministic:** the model is deterministic; the *agent* on top provides the conversational Q&A.
 
+## 3b. Deployment note — where the orchestration runs today
+
+Two valid places for the conversational orchestration:
+
+- **In-app (deployed now):** the app authenticates as its own service principal and runs the
+  Llama tool-calling loop itself — it calls the model endpoint (`price_fairness`) and the two UC
+  functions directly, then the FM writes the conversational answer. Chosen because a standalone
+  agent endpoint's *automatic-auth passthrough* credential is downscoped to its declared resources
+  and, in this workspace, can't satisfy the `USE CATALOG on system` check that calling a
+  `system.ai` foundation model requires. The app SP has that access directly, so this path works.
+- **Standalone agent endpoint (`capex-agent`, code in `notebooks/deploy_agent.py`):** the intended
+  "app calls the agent URL" design. It is built and deploys, but calling the FM from it is blocked
+  by the passthrough limitation above. Unblock by enabling **on-behalf-of-user auth** for the agent
+  (workspace-admin setting) or having an account admin enable `system.ai` FM access for serving
+  automatic-auth identities. The tools (`price_fairness`, `cross_unit_history`, `recommend_vendor`)
+  are reused unchanged when this is switched on.
+
+Reliability note: the FM does **not** decide tool order (Llama's multi-step tool-calling is
+unreliable — it sometimes emits calls as plain text). The app runs all tools **deterministically**
+per line item and hands the results to the FM purely for conversational synthesis and follow-ups.
+
 ## 4. Foundation model, hosting & privacy
 
 - **Reasoning model:** `databricks-llama-4-maverick` — a **Databricks-hosted, in-region** Llama foundation

@@ -1,12 +1,12 @@
 command: ["streamlit", "run", "app.py"]
 env:
-  - name: AGENT_ENDPOINT
-    valueFrom: agent-endpoint
+  - name: CHAT_LLM
+    valueFrom: chat-llm
+  - name: MODEL_ENDPOINT
+    valueFrom: model-endpoint
   - name: DATABRICKS_WAREHOUSE_ID
     valueFrom: sql-warehouse
   - name: CATALOG
     value: "kauvey_poc"
   - name: SCHEMA
     value: "gold"
-  - name: PARSE_LLM
-    value: "databricks-llama-4-maverick"
