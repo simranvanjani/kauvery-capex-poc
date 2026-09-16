@@ -505,6 +505,10 @@ import mlflow
 
 FEATURE_COLS = ["price_variance_pct", "warranty_delta_months", "amc_camc_present",
                 "delivery_lead_days", "foc_present", "hist_frequency_norm", "payment_terms_score"]
+# Exactly the columns a caller/endpoint must send (drives the MLflow signature).
+MODEL_INPUT_COLS = ["item_description", "make_brand", "model_no", "qty", "unit_rate", "warranty_months",
+                    "amc_present", "camc_present", "foc_present", "delivery_lead_days", "payment_terms",
+                    "has_training", "has_installation"]
 WEIGHTS = {"price": 30, "warranty": 15, "amc_camc": 15, "delivery": 10, "foc": 10, "frequency": 10, "payment": 10}
 
 CATEGORY_KEYWORDS = {
@@ -693,12 +697,19 @@ print(train.describe().round(2).to_string())
 
 # COMMAND ----------
 
-import mlflow, joblib
+import mlflow, joblib, sklearn, scipy, cloudpickle
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, r2_score
 from mlflow.models import infer_signature
 from databricks.sdk import WorkspaceClient
+
+# Pin exact versions so the serving image matches training (the sklearn model is a raw joblib
+# artifact, so MLflow can't infer scipy/cloudpickle on its own — list them explicitly).
+PIP_REQS = [f"mlflow=={mlflow.__version__}", f"scikit-learn=={sklearn.__version__}",
+            f"numpy=={np.__version__}", f"pandas=={pd.__version__}", f"scipy=={scipy.__version__}",
+            f"joblib=={joblib.__version__}", f"cloudpickle=={cloudpickle.__version__}"]
+print("pip_requirements:", PIP_REQS)
 
 mlflow.set_registry_uri("databricks-uc")
 me = WorkspaceClient().current_user.me().user_name
@@ -731,7 +742,10 @@ with mlflow.start_run(run_name="capex_worth_it") as run:
         mlflow.log_metric(f"importance_{f}", float(imp))
     joblib.dump(reg, f"{SRC_DIR}/sk_model.joblib")
 
-    example = quote_df.head(1)
+    example = quote_df[cs.MODEL_INPUT_COLS].head(1).copy()
+    example["unit_rate"] = example["unit_rate"].astype(float)   # double: callers send float rates
+    for _c in ["qty", "warranty_months", "delivery_lead_days"]:
+        example[_c] = example[_c].astype(int)
     signature = infer_signature(example, pd.DataFrame([{
         "item_description": "x", "make_brand": "x", "model_no": "x", "category": "x", "match_level": "x",
         "benchmark_unit_rate": 0.0, "benchmark_po": "x", "benchmark_po_date": "x", "quoted_unit_rate": 0.0,
@@ -744,7 +758,7 @@ with mlflow.start_run(run_name="capex_worth_it") as run:
                    "reference_bom": f"{SRC_DIR}/reference_bom.json",
                    "component_examples": f"{SRC_DIR}/component_examples.json"},
         signature=signature, input_example=example,
-        pip_requirements=["scikit-learn", "pandas", "numpy", "joblib", "mlflow"],
+        pip_requirements=PIP_REQS,
         registered_model_name=FULL_MODEL_NAME,
     )
 print(f"MAE={mae:.2f}  R2={r2:.3f}  verdict_accuracy={va:.3f}")
@@ -767,7 +781,9 @@ print(f"Alias @prod -> v{info.registered_model_version}")
 # COMMAND ----------
 
 scorer = mlflow.pyfunc.load_model(f"models:/{FULL_MODEL_NAME}@prod")
-result = scorer.predict(quote_df)
+_q = quote_df[cs.MODEL_INPUT_COLS].copy()
+_q["unit_rate"] = _q["unit_rate"].astype(float)   # match signature (double); callers send float
+result = scorer.predict(_q)
 
 import json as _json
 for _, r in result.iterrows():
