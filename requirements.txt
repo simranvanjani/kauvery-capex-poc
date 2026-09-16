@@ -1,0 +1,9 @@
+# Python dependencies for the CAPEX Phase 2 demo notebook.
+# On Databricks these are installed by the notebook's %pip cell (fpdf2, joblib) plus the
+# serverless environment spec; mlflow / scikit-learn / pandas / numpy ship with the ML runtime.
+fpdf2
+joblib
+mlflow>=2.22
+scikit-learn
+pandas
+numpy
