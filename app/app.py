@@ -32,60 +32,64 @@ WELCOME = (
     "purchases across sites, and suggest how to negotiate. Your quotation data stays private and in "
     "your control.")
 
-CHIPS = ["Is this price fair?", "Which vendor should we pick?",
-         "What's missing from this quote?", "Show cross-site prices"]
+CHIPS = ["📈 Patient monitor price trend", "🏆 Best vendor for ventilators",
+         "📊 Cross-site CT scanner prices", "💡 What can you do?"]
 
 CSS = """
 <style>
-/* Genie-style: restrained neutral surfaces, one calm blue accent, readable everywhere. */
+/* Modelled on Databricks Genie One: near-black canvas, soft glow, centered hero, icon pills. */
 :root{
-  --bg:#0E1117; --surface:#161A21; --surface2:#1C222B; --border:#2A313C;
-  --text:#E6E8EB; --muted:#8B95A3; --accent:#4C8DFF; --accent-weak:rgba(76,141,255,.12);
-  --radius:12px;
+  --bg:#0B0C0E; --surface:#161719; --surface2:#1C1E22; --border:#2A2D33;
+  --text:#ECEDEE; --muted:#8A9099; --accent:#5B8DEF; --accent-weak:rgba(91,141,239,.14);
+  --radius:14px;
 }
-[data-testid="stAppViewContainer"]{background:var(--bg);color:var(--text);
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif;}
-.block-container{padding-top:2.4rem;padding-bottom:7rem;max-width:840px;}
-h1{font-size:1.55rem;font-weight:650;letter-spacing:-.2px;color:var(--text);margin-bottom:.2rem;}
-h2,h3{color:var(--text);font-weight:600;}
+[data-testid="stAppViewContainer"]{
+  background:radial-gradient(900px 420px at 50% -60px, rgba(124,92,255,.10), transparent 70%), var(--bg);
+  color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif;}
+.block-container{padding-top:3rem;padding-bottom:7rem;max-width:820px;}
+h1,h2,h3{color:var(--text);font-weight:600;letter-spacing:-.2px;}
 p{color:var(--muted);line-height:1.6;}
-footer,[data-testid="stToolbar"]{display:none;}
+footer,[data-testid="stToolbar"],[data-testid="stHeader"]{display:none;}
 
 /* sidebar */
-[data-testid="stSidebar"]{background:var(--surface);border-right:1px solid var(--border);}
-[data-testid="stSidebar"] h1,[data-testid="stSidebar"] h2,[data-testid="stSidebar"] h3{
-  font-size:.72rem;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:600;}
+[data-testid="stSidebar"]{background:#0E0F11;border-right:1px solid var(--border);}
+[data-testid="stSidebar"] .stExpander{border:1px solid var(--border);border-radius:10px;background:var(--surface);}
 
-/* file uploader */
-[data-testid="stFileUploaderDropzone"]{background:var(--surface2);border:1px dashed var(--border);
-  border-radius:var(--radius);transition:all .15s ease;}
-[data-testid="stFileUploaderDropzone"]:hover{border-color:var(--accent);background:var(--accent-weak);}
+/* ---- centered hero (empty state) ---- */
+.hero{text-align:center;margin:7vh auto 1.6rem;}
+.hero .tile{width:60px;height:60px;border-radius:18px;margin:0 auto 1.4rem;display:flex;
+  align-items:center;justify-content:center;font-size:28px;
+  background:linear-gradient(150deg,#2A2340,#17181C);border:1px solid var(--border);
+  box-shadow:0 10px 40px rgba(124,92,255,.28);}
+.hero .h{font-size:2.1rem;font-weight:600;color:#F4F5F6;margin:0;}
+.hero .sub{color:var(--muted);margin:.6rem auto 0;max-width:560px;font-size:.98rem;}
 
-/* chat — clean thread, no loud bubbles */
+/* chat — clean thread */
 [data-testid="stChatMessage"]{background:transparent;border:none;border-bottom:1px solid var(--border);
-  border-radius:0;padding:1rem .25rem;margin:0;box-shadow:none;}
+  border-radius:0;padding:1.1rem .25rem;margin:0;box-shadow:none;}
 [data-testid="stChatMessage"] .stMarkdown{color:var(--text);line-height:1.65;}
 [data-testid="stChatMessage"] table{width:100%;border-collapse:collapse;font-size:.85rem;margin:.5rem 0;}
 [data-testid="stChatMessage"] th,[data-testid="stChatMessage"] td{
-  border:1px solid var(--border);padding:.4rem .6rem;text-align:left;}
+  border:1px solid var(--border);padding:.42rem .6rem;text-align:left;}
 [data-testid="stChatMessage"] th{background:var(--surface2);color:var(--text);font-weight:600;}
 
-/* chat input — clean rounded bar */
-[data-testid="stChatInput"]{background:var(--surface2);border:1px solid var(--border);
-  border-radius:14px;box-shadow:0 4px 16px rgba(0,0,0,.3);}
-[data-testid="stChatInput"]:focus-within{border-color:var(--accent);
-  box-shadow:0 0 0 2px var(--accent-weak);}
+/* chat input — large elevated rounded card, like Genie's ask box */
+[data-testid="stChatInput"]{background:var(--surface);border:1px solid var(--border);
+  border-radius:16px;box-shadow:0 10px 34px rgba(0,0,0,.45);padding:.35rem .5rem;}
+[data-testid="stChatInput"]:focus-within{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-weak),0 10px 34px rgba(0,0,0,.45);}
+[data-testid="stChatInput"] textarea{font-size:1rem;}
 [data-testid="stChatInput"] textarea::placeholder{color:var(--muted);}
 
-/* primary button (Analyze) — solid accent, white text */
-button[kind="primary"],button[kind="primaryFormSubmit"]{background:var(--accent);color:#fff;
-  border:none;border-radius:10px;font-weight:600;box-shadow:none;}
-button[kind="primary"]:hover,button[kind="primaryFormSubmit"]:hover{background:#3B7BEE;color:#fff;}
+/* primary button */
+button[kind="primary"],button[kind="primaryFormSubmit"]{background:var(--accent);color:#fff;border:none;
+  border-radius:10px;font-weight:600;box-shadow:none;}
+button[kind="primary"]:hover,button[kind="primaryFormSubmit"]:hover{background:#4A7CE0;color:#fff;}
 
-/* default buttons (chips, sidebar actions) — subtle outlined pills, readable */
-.stButton>button{background:var(--surface2);color:var(--text);border:1px solid var(--border);
-  border-radius:10px;font-weight:500;transition:all .15s ease;box-shadow:none;padding:.5rem 1rem;}
-.stButton>button:hover{background:var(--accent-weak);border-color:var(--accent);color:var(--text);}
+/* action pills (suggested prompts) — dark rounded pills with icon, readable */
+.stButton>button{background:var(--surface);color:var(--text);border:1px solid var(--border);
+  border-radius:11px;font-weight:500;transition:all .15s ease;box-shadow:none;padding:.6rem .9rem;
+  font-size:.9rem;}
+.stButton>button:hover{background:var(--surface2);border-color:#3A3E46;color:#fff;}
 [data-testid="stSidebar"] .stButton>button{width:100%;}
 
 /* inputs */
@@ -93,14 +97,9 @@ input,textarea{background:var(--surface2)!important;color:var(--text)!important;
   border:1px solid var(--border)!important;border-radius:10px!important;}
 input:focus,textarea:focus{border-color:var(--accent)!important;box-shadow:0 0 0 2px var(--accent-weak)!important;}
 
-/* welcome card */
-.welcome{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  padding:1.1rem 1.25rem;color:var(--muted);line-height:1.6;margin:.5rem 0 1rem;}
-.welcome b{color:var(--text);}
-
 ::-webkit-scrollbar{width:9px;height:9px;}
-::-webkit-scrollbar-thumb{background:rgba(139,149,163,.3);border-radius:5px;}
-::-webkit-scrollbar-thumb:hover{background:rgba(139,149,163,.55);}
+::-webkit-scrollbar-thumb{background:rgba(138,144,153,.3);border-radius:5px;}
+::-webkit-scrollbar-thumb:hover{background:rgba(138,144,153,.55);}
 </style>
 """
 
@@ -306,65 +305,63 @@ with st.sidebar:
                 except Exception as e:  # noqa: BLE001
                     st.error(f"Could not save: {e}")
 
-st.title("📋 CAPEX Quotation Assistant")
-st.markdown("Ask about an instrument, a vendor, or a price trend — or attach a quotation to compare it "
-            "against your purchase history.")
-
-# empty state: quiet welcome + suggested-question pills
+# empty-state hero (Genie-style: icon tile → heading → suggestion pills)
 if not st.session_state.history:
-    st.markdown(f'<div class="welcome">{WELCOME}</div>', unsafe_allow_html=True)
-    st.caption("Try asking")
+    st.markdown(
+        '<div class="hero"><div class="tile">✦</div>'
+        '<div class="h">How can I help you?</div>'
+        '<div class="sub">Ask about an instrument, a vendor, or a price trend — or attach a vendor '
+        "quotation and I'll compare it against your purchase history.</div></div>",
+        unsafe_allow_html=True)
     cols = st.columns(len(CHIPS))
     for c, chip in zip(cols, CHIPS):
         if c.button(chip, use_container_width=True):
-            st.session_state.pending_text = chip
+            st.session_state.history.append({"role": "user", "content": chip})
+            st.session_state.pending = {"text": chip, "file": None, "name": None}
             st.rerun()
 
+# render the conversation so far
 for m in st.session_state.history:
     with st.chat_message(m["role"], avatar="📋" if m["role"] == "assistant" else "🧑‍⚕️"):
         st.markdown(m["content"])
 
-# Single Genie-style input: type a question, or use the paperclip to attach a quotation PDF.
-ci = st.chat_input("Message the assistant — or attach a quotation PDF", accept_file=True, file_type=["pdf"])
-
-prompt, files, pending_lines = None, [], None
-if ci is not None:
-    if isinstance(ci, str):                      # older Streamlit: plain text only
-        prompt = ci.strip()
-    else:                                        # ChatInputValue: .text + .files
-        prompt = (getattr(ci, "text", "") or "").strip()
-        files = list(getattr(ci, "files", []) or [])
-elif st.session_state.get("pending_text"):       # a suggestion chip was clicked
-    prompt = st.session_state.pop("pending_text")
-    pending_lines = st.session_state.pop("pending_lines", None)
-
-# An attached PDF becomes a quotation to review.
-attach_note = ""
-if files:
-    with st.spinner("Reading your quotation…"):
-        try:
-            lines = parse_pdf(files[0].getvalue())
-        except Exception:  # noqa: BLE001
-            lines = []
-    if lines:
-        pending_lines = lines
-        names = ", ".join(f"{l.get('qty','')}× {l.get('item_description','item')}" for l in lines)
-        attach_note = f"📎 {files[0].name}"
-        prompt = prompt or f"Please review this quotation: {names}."
-    else:
-        prompt = prompt or "I attached a quotation but it couldn't be read automatically."
-
-if prompt:
-    shown = f"{attach_note}\n\n{prompt}" if attach_note else prompt
-    st.session_state.history.append({"role": "user", "content": shown})
-    with st.chat_message("user", avatar="🧑‍⚕️"):
-        st.markdown(shown)
+# process a pending user turn (the user's message is already rendered above)
+if st.session_state.get("pending"):
+    p = st.session_state.pop("pending")
     with st.chat_message("assistant", avatar="📋"):
-        with st.spinner("Comparing against your purchase history…"):
+        with st.spinner("Working on it…"):
+            text, pending_lines = (p.get("text") or ""), None
+            if p.get("file"):
+                try:
+                    pending_lines = parse_pdf(p["file"]) or None
+                except Exception:  # noqa: BLE001
+                    pending_lines = None
+                if pending_lines:
+                    names = ", ".join(f"{l.get('qty','')}× {l.get('item_description','item')}"
+                                      for l in pending_lines)
+                    text = text or f"Please review this quotation: {names}."
+                elif not text:
+                    text = "I attached a quotation but it couldn't be read automatically."
             try:
-                answer = handle_turn(prompt, pending_lines)
+                answer = handle_turn(text, pending_lines)
             except Exception as e:  # noqa: BLE001
                 answer = f"Sorry — something went wrong: {e}"
         st.markdown(answer)
     st.session_state.history.append({"role": "assistant", "content": answer})
     st.rerun()
+
+# input: type a question, or use the ＋ paperclip to attach a quotation PDF
+ci = st.chat_input("Message the assistant — or attach a quotation PDF", accept_file=True, file_type=["pdf"])
+if ci is not None:
+    if isinstance(ci, str):                       # older Streamlit fallback: text only
+        text, fbytes, fname = ci.strip(), None, None
+    else:                                         # ChatInputValue: .text + .files
+        text = (getattr(ci, "text", "") or "").strip()
+        fs = list(getattr(ci, "files", []) or [])
+        fbytes = fs[0].getvalue() if fs else None
+        fname = fs[0].name if fs else None
+    if text or fbytes:
+        shown = (f"📎 {fname}" + (f"\n\n{text}" if text else "")) if fname else text
+        st.session_state.history.append({"role": "user", "content": shown})
+        st.session_state.pending = {"text": text, "file": fbytes, "name": fname}
+        st.rerun()
