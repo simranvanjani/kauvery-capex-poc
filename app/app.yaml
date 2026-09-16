@@ -1,4 +1,12 @@
 command: ["streamlit", "run", "app.py"]
 env:
-  - name: SERVING_ENDPOINT
-    valueFrom: serving-endpoint
+  - name: AGENT_ENDPOINT
+    valueFrom: agent-endpoint
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: sql-warehouse
+  - name: CATALOG
+    value: "kauvey_poc"
+  - name: SCHEMA
+    value: "gold"
+  - name: PARSE_LLM
+    value: "databricks-llama-4-maverick"

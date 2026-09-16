@@ -1,3 +1,4 @@
-# streamlit + databricks-sdk ship with the Databricks Apps runtime; pinned here for clarity.
+# streamlit + databricks-sdk ship with the Databricks Apps runtime; openai is needed for
+# WorkspaceClient().serving_endpoints.get_open_ai_client(). Pinned loosely for clarity.
 databricks-sdk
-pandas
+openai
