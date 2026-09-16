@@ -148,8 +148,9 @@ def parse_pdf(file_bytes: bytes) -> list[dict]:
               "payment_terms (string), has_training (bool), has_installation (bool)}")
     stmt = f"""
       WITH raw AS (SELECT content FROM read_files('{path}', format => 'binaryFile')),
-      parsed AS (SELECT concat_ws('\\n', transform(ai_parse_document(content):document:elements,
-                                                    e -> e:content::string)) AS txt FROM raw)
+      parsed AS (SELECT concat_ws('\\n', transform(
+                          cast(ai_parse_document(content):document:elements AS ARRAY<VARIANT>),
+                          e -> e:content::string)) AS txt FROM raw)
       SELECT ai_query('{CHAT_LLM}',
         concat('Extract every quotation line item as JSON with key "line_items" = array of {schema}. ',
                'Booleans reflect whether the quote includes AMC/CMC, FOC, training, installation. Text:\\n', txt),
