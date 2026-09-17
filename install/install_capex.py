@@ -137,9 +137,15 @@ print("functions ready: cross_unit_history, recommend_vendor, price_fairness")
 # MAGIC %md
 # MAGIC ## 4 · ML model  (train via `capex_phase2_demo` if missing)
 # MAGIC If `capex_worth_it` isn't registered yet, this runs the training notebook against your real data
-# MAGIC (`data_source=real`). It must sit next to this one (e.g. in the same Git folder).
+# MAGIC (`data_source=real`). The training notebook lives at `../notebooks/capex_phase2_demo` — this resolves
+# MAGIC when the whole repo is imported as a **Git folder** (keeping the `install/` + `notebooks/` layout).
+# MAGIC If you imported notebooks individually, set `TRAIN_NOTEBOOK_PATH` below to its actual path.
 
 # COMMAND ----------
+
+# Relative to THIS notebook's folder (install/). The training notebook is in ../notebooks/.
+# Override if you imported the notebooks individually.
+TRAIN_NOTEBOOK_PATH = "../notebooks/capex_phase2_demo"
 
 model_exists = False
 try:
@@ -147,15 +153,17 @@ try:
     model_exists = True
     print(f"{FULL_MODEL} already registered — leaving it (re-run capex_phase2_demo to retrain).")
 except Exception:
-    print(f"{FULL_MODEL} not found — training now via capex_phase2_demo …")
+    print(f"{FULL_MODEL} not found — training now via {TRAIN_NOTEBOOK_PATH} …")
     try:
-        dbutils.notebook.run("./capex_phase2_demo", 3600, {
+        dbutils.notebook.run(TRAIN_NOTEBOOK_PATH, 3600, {
             "data_source": "real", "catalog": CATALOG, "schema": SCHEMA, "model_name": MODEL_NAME})
         model_exists = True
         print("training complete.")
     except Exception as e:
         print(f"[action needed] couldn't auto-run the training notebook ({e}).")
-        print("  Open capex_phase2_demo, set data_source=real + catalog/schema, Run All, then re-run this cell.")
+        print(f"  Fix: set TRAIN_NOTEBOOK_PATH above to the real path of capex_phase2_demo, OR")
+        print(f"  open capex_phase2_demo, set data_source=real + catalog={CATALOG} + schema={SCHEMA}, "
+              f"Run All, then re-run this cell.")
 
 # COMMAND ----------
 
