@@ -1,0 +1,84 @@
+bundle:
+  name: capex_copilot
+
+variables:
+  # Fill these for your workspace (install.py can pass them / or set here).
+  warehouse_id:
+    description: SQL warehouse id used for UC-function calls + ai_query PDF parsing
+    default: ""            # TODO: set your SQL warehouse id
+  experiment_id:
+    description: MLflow experiment id for agent tracing (the monitor reads this)
+    default: ""            # TODO: set after `databricks experiments create` (or let quickstart create one)
+  catalog:
+    default: kauvey_poc
+  schema:
+    default: gold
+
+resources:
+  apps:
+    capex_copilot:
+      name: "capex-copilot"
+      description: "Kauvery CAPEX Copilot — quotation review assistant with history, feedback, and admin monitor"
+      source_code_path: ./
+      config:
+        command: ["uv", "run", "start-app"]
+        env:
+          - name: MLFLOW_TRACKING_URI
+            value: "databricks"
+          - name: MLFLOW_REGISTRY_URI
+            value: "databricks-uc"
+          - name: API_PROXY
+            value: "http://localhost:8000/invocations"
+          - name: CHAT_APP_PORT
+            value: "3000"
+          - name: CHAT_PROXY_TIMEOUT_SECONDS
+            value: "300"
+          - name: MLFLOW_EXPERIMENT_ID
+            value_from: "experiment"
+          # ---- CAPEX config ----
+          - name: CATALOG
+            value: ${var.catalog}
+          - name: SCHEMA
+            value: ${var.schema}
+          - name: CHAT_MODEL                     # swap to a Claude / GPT endpoint to change the FM
+            value: "databricks-llama-4-maverick"
+          - name: MODEL_ENDPOINT
+            value: "capex-worth-it"
+          - name: DATABRICKS_WAREHOUSE_ID
+            value_from: "sql-warehouse"
+
+      # Resources the app's service principal is granted on deploy (create-or-update).
+      resources:
+        - name: "experiment"
+          experiment:
+            experiment_id: ${var.experiment_id}
+            permission: "CAN_MANAGE"
+        - name: "chat-llm"                       # conversational FM
+          serving_endpoint:
+            name: "databricks-llama-4-maverick"
+            permission: "CAN_QUERY"
+        - name: "model-endpoint"                 # custom scikit-learn scorer
+          serving_endpoint:
+            name: "capex-worth-it"
+            permission: "CAN_QUERY"
+        - name: "sql-warehouse"
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: "CAN_USE"
+        # Conversation history + feedback (per-user isolated, 7-day) live in Lakebase.
+        - name: "database"
+          database:
+            database_name: databricks_postgres
+            instance_name: capex-v2
+            permission: "CAN_CONNECT_AND_CREATE"
+
+targets:
+  dev:
+    mode: development
+    default: true
+  prod:
+    mode: production
+    resources:
+      apps:
+        capex_copilot:
+          name: capex-copilot

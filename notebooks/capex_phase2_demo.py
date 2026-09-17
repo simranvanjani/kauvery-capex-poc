@@ -45,11 +45,15 @@ dbutils.widgets.text("catalog", "kauvey_poc", "Catalog")
 dbutils.widgets.text("schema", "gold", "Schema")
 dbutils.widgets.text("model_name", "capex_worth_it", "Registered model name")
 dbutils.widgets.text("n_pos", "6000", "Number of historical POs to generate")
+# V2: the customer loads historical POs directly into extracted_pdf_datas (from Oracle) — no PDF parsing.
+# "real" reads that table; "synthetic" generates demo history (default, for the standalone demo).
+dbutils.widgets.dropdown("data_source", "synthetic", ["synthetic", "real"], "Historical data source")
 
 CATALOG = dbutils.widgets.get("catalog").strip()
 SCHEMA = dbutils.widgets.get("schema").strip()
 MODEL_NAME = dbutils.widgets.get("model_name").strip()
 N_POS = int(dbutils.widgets.get("n_pos"))
+DATA_SOURCE = dbutils.widgets.get("data_source").strip()
 
 HIST_TABLE = f"{CATALOG}.{SCHEMA}.extracted_pdf_datas"
 COMPARISON_TABLE = f"{CATALOG}.{SCHEMA}.quote_comparison_sheets"
@@ -97,6 +101,37 @@ print("catalog / schema / volume ready")
 # MAGIC - **Warranty / AMC / FOC** are present on *most* finalized purchases (they were negotiated) but not all — which is exactly what makes a new quote's omissions visible.
 # MAGIC
 # MAGIC > Replace this whole section with a read of the customer's real table and everything downstream still works.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### 2 · REAL-DATA MODE  (`data_source = real`) — run THIS cell, then SKIP the synthetic cells below
+# MAGIC The customer ingests historical POs **directly into `extracted_pdf_datas`** (from Oracle) — **no PDF parsing
+# MAGIC in the pipeline**. This reads that real table into `hist_pdf` for the benchmark step.
+# MAGIC
+# MAGIC **V2: categories are optional.** Benchmarks match on `model_no` + `make_brand`; if the real table has an
+# MAGIC equipment-type column, point `CATEGORY_COL` at it, otherwise everything uses the single universal Reference BOM.
+# MAGIC The real table must contain: `unit_rate, po_date, model_no, make_brand, po_number, unit_name,
+# MAGIC warranty_months, amc_value, camc_value, foc_details, special_instructions, source_file_name` (rename to match).
+
+# COMMAND ----------
+
+if DATA_SOURCE == "real":
+    import pandas as pd, numpy as np
+    hist_pdf = spark.table(HIST_TABLE).toPandas()   # real, tabular history — no PDF parsing
+    CATEGORY_COL = ""   # <- set to your equipment-type column if you have one (e.g. "equipment_type"); else leave blank
+    if CATEGORY_COL and CATEGORY_COL in hist_pdf.columns:
+        hist_pdf["_category"] = hist_pdf[CATEGORY_COL].fillna("General")
+    else:
+        hist_pdf["_category"] = "General"           # universal BOM; benchmark matches on model_no + make_brand
+    hist_pdf["po_date"] = pd.to_datetime(hist_pdf["po_date"], errors="coerce").dt.strftime("%d/%m/%y")
+    missing = [c for c in ["unit_rate","po_date","model_no","make_brand","po_number","unit_name",
+                           "warranty_months","amc_value","camc_value","foc_details",
+                           "special_instructions","source_file_name"] if c not in hist_pdf.columns]
+    assert not missing, f"real table {HIST_TABLE} is missing columns the benchmark needs: {missing}"
+    print(f"REAL MODE: loaded {len(hist_pdf):,} rows from {HIST_TABLE}. Skip the synthetic cells below; go to Section 3.")
+else:
+    print("SYNTHETIC MODE: run the cells below to generate demo history.")
 
 # COMMAND ----------
 
