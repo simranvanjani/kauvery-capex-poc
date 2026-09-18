@@ -248,28 +248,42 @@ except Exception as e:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 7 · Deploy the CAPEX app  (pre-filled from §1 — so the app can't drift from the backend)
-# MAGIC The app is built from source, so this one step runs from a terminal with the Databricks CLI.
-# MAGIC The cell below prints — **already filled in with your §1 values** — the `app.yaml` env block, the
-# MAGIC service-principal grants (`resources.json`), and the exact deploy commands. Copy/paste them from the
-# MAGIC repo root. Re-deploys keep the same URL. (`app.yaml` ships matching the §1 defaults; only update it
-# MAGIC if you changed §1.)
+# MAGIC ## 7 · Deploy the CAPEX app  (config written from §1 — the app can't drift from the backend)
+# MAGIC The cell below **writes `app-v2/app.yaml` from your §1 values** (so the app always matches the backend),
+# MAGIC then prints the service-principal grants (`resources.json`) and the exact deploy commands. Run those from
+# MAGIC a terminal with the Databricks CLI; the app source is already in this Git folder. Re-deploys keep the same URL.
 
 # COMMAND ----------
 
-import json
-USER = w.current_user.me().user_name
-# Adjust the folder name if your Git folder isn't "kauvery-capex-poc".
-WS_APP_PATH = f"/Workspace/Users/{USER}/kauvery-capex-poc/app-v2"
+import json, os
 
-# app env (app-v2/app.yaml) — generated from §1 so it matches the backend exactly
-app_env = {
-    "MLFLOW_TRACKING_URI": "databricks", "MLFLOW_REGISTRY_URI": "databricks-uc",
-    "CHAT_PROXY_TIMEOUT_SECONDS": "300",
-    "CATALOG": CATALOG, "SCHEMA": SCHEMA, "MODEL_ENDPOINT": ENDPOINT,
-    "CHAT_MODEL": CHAT_MODEL, "EXTRACT_MODEL": EXTRACT_MODEL, "LAKEBASE_SCHEMA": LAKEBASE_SCHEMA,
-}
-# resources the app service principal is granted
+# app-v2/app.yaml, generated from §1 so the app always matches the backend
+_env = [
+    ("MLFLOW_TRACKING_URI", "databricks"), ("MLFLOW_REGISTRY_URI", "databricks-uc"),
+    ("CHAT_PROXY_TIMEOUT_SECONDS", "300"),
+    ("CATALOG", CATALOG), ("SCHEMA", SCHEMA), ("MODEL_ENDPOINT", ENDPOINT),
+    ("CHAT_MODEL", CHAT_MODEL), ("EXTRACT_MODEL", EXTRACT_MODEL), ("LAKEBASE_SCHEMA", LAKEBASE_SCHEMA),
+]
+app_yaml = 'command: ["uv", "run", "start-server"]\n'
+app_yaml += "# Generated from install_capex §1 — edit §1 and re-run; do not hand-edit.\n\nenv:\n"
+for k, v in _env:
+    app_yaml += f'  - name: {k}\n    value: "{v}"\n'
+app_yaml += '  - name: DATABRICKS_WAREHOUSE_ID\n    valueFrom: "sql-warehouse"\n'
+
+# Resolve this Git folder's app-v2/app.yaml from the notebook's own path, and write it.
+WS_APP_PATH = None
+try:
+    _nb = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
+    _root = os.path.dirname(os.path.dirname(_nb))          # .../install/install_capex -> repo root
+    WS_APP_PATH = f"/Workspace{_root}/app-v2"
+    with open(f"{WS_APP_PATH}/app.yaml", "w") as fh:
+        fh.write(app_yaml)
+    print(f"✅ wrote {WS_APP_PATH}/app.yaml from §1\n")
+except Exception as e:
+    print(f"[note] couldn't auto-write app.yaml ({e}) — paste this into app-v2/app.yaml:\n\n{app_yaml}")
+    WS_APP_PATH = "/Workspace/Users/<you>/kauvery-capex-poc/app-v2"
+
+# Service-principal grants (save as resources.json, then attach with create-update)
 resources = {"update_mask": "resources", "app": {"resources": [
     {"name": "chat-llm",       "serving_endpoint": {"name": CHAT_MODEL,    "permission": "CAN_QUERY"}},
     {"name": "extract-llm",    "serving_endpoint": {"name": EXTRACT_MODEL, "permission": "CAN_QUERY"}},
@@ -280,23 +294,14 @@ resources = {"update_mask": "resources", "app": {"resources": [
         "database": f"projects/{LAKEBASE_PROJECT}/branches/production/databases/databricks-postgres",
         "permission": "CAN_CONNECT_AND_CREATE"}},
 ]}}
-
-print("── 1. app-v2/app.yaml env  (matches §1; update app.yaml only if you changed §1) ──")
-print('command: ["uv", "run", "start-server"]\nenv:')
-for k, v in app_env.items():
-    print(f'  - name: {k}\n    value: "{v}"')
-print('  - name: DATABRICKS_WAREHOUSE_ID\n    valueFrom: "sql-warehouse"')
-
-print("\n── 2. resources.json  (app service-principal grants) ──")
+print("── resources.json (app service-principal grants) ──")
 print(json.dumps(resources, indent=2))
 
-print("\n── 3. run from the repo root (terminal, Databricks CLI) ──")
+print("\n── deploy from a terminal with the Databricks CLI (source is already in this Git folder) ──")
 print(f"databricks apps create {APP_NAME}                                  # once; skip if it exists")
-print(f"databricks sync app-v2 {WS_APP_PATH}")
 print(f"databricks apps deploy {APP_NAME} --source-code-path {WS_APP_PATH}")
 print(f"databricks apps create-update {APP_NAME} --json @resources.json    # attach the grants above")
 print(f"databricks apps deploy {APP_NAME} --source-code-path {WS_APP_PATH} # redeploy so the SP owns its Lakebase schema")
-
 if not WAREHOUSE_ID:
     print("\n[action needed] WAREHOUSE_ID is empty in §1 — set it, or the sql-warehouse grant fails.")
-print(f"\n✅ Backend install complete for {CATALOG}.{SCHEMA}. Deploy the app with the commands above.")
+print(f"\n✅ Backend install complete for {CATALOG}.{SCHEMA}.")
