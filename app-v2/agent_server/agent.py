@@ -32,6 +32,10 @@ logging.getLogger("mlflow.utils.autologging_utils").setLevel(logging.ERROR)
 # CHAT_MODEL is the conversational FM. Swap it to any Databricks-hosted model
 # (databricks-llama-4-maverick / a Claude / a GPT endpoint) — the code is model-agnostic.
 CHAT_MODEL = os.getenv("CHAT_MODEL", "databricks-llama-4-maverick")
+# PDF extraction runs ai_query with responseFormat=json_object, which Claude does NOT support
+# ("responseFormat is invalid or unsupported by the model"). Keep a Llama/GPT model here even
+# when the agent's CHAT_MODEL is Claude.
+EXTRACT_MODEL = os.getenv("EXTRACT_MODEL", "databricks-llama-4-maverick")
 MODEL_ENDPOINT = os.getenv("MODEL_ENDPOINT", "capex-worth-it")  # custom scikit-learn scorer
 WAREHOUSE_ID = os.getenv("DATABRICKS_WAREHOUSE_ID", "")
 CATALOG = os.getenv("CATALOG", "kauvey_poc")
@@ -89,7 +93,7 @@ def parse_quotation_pdf(volume_path: str) -> str:
       parsed AS (SELECT concat_ws('\\n', transform(
                           cast(ai_parse_document(content):document:elements AS ARRAY<VARIANT>),
                           e -> e:content::string)) AS txt FROM raw)
-      SELECT ai_query('{CHAT_MODEL}',
+      SELECT ai_query('{EXTRACT_MODEL}',
         concat('Extract EVERY quotation line item as JSON with key "line_items" = array of {item_schema}. ',
                'The PDF layout is arbitrary and vendor-specific — find the same fields regardless of format. ',
                'Booleans reflect whether the quote includes maintenance (AMC/CMC), free-of-cost items, ',

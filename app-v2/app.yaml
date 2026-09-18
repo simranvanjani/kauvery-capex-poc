@@ -20,3 +20,6 @@ env:
     value: "capex-worth-it"
   - name: CHAT_MODEL
     value: "databricks-claude-sonnet-4-5"
+  # PDF extraction ai_query needs json_object responseFormat (unsupported by Claude) -> keep Llama.
+  - name: EXTRACT_MODEL
+    value: "databricks-llama-4-maverick"
