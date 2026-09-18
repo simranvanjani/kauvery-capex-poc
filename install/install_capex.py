@@ -6,17 +6,21 @@
 # MAGIC everything the CAPEX app needs, in **your** workspace, against **your** already-loaded history.
 # MAGIC No local setup, no CLI, no profile — the notebook runs as you, on your cluster.
 # MAGIC
-# MAGIC | Step | What it does |
-# MAGIC |---|---|
-# MAGIC | 1 | catalog / schema / landing volume (create if missing) |
-# MAGIC | 2 | the 3 Unity Catalog functions (`CREATE OR REPLACE` — always refreshed) |
-# MAGIC | 3 | the ML model `capex_worth_it` (train if missing; **retrain when _Update existing assets_ = yes**) |
-# MAGIC | 4 | the serving endpoint `capex-worth-it` (create, or update to the latest `@prod`) |
-# MAGIC | 5 | a Lakebase project for conversation history (create if missing) |
-# MAGIC | 6 | the CAPEX app (guided — see the last cell) |
+# MAGIC **Set your values once in §1 (Configuration) — that single cell is the only thing you edit.**
+# MAGIC Every step below, *and the app*, reads exactly those values, so the backend and the app can't drift.
 # MAGIC
-# MAGIC Every step is **idempotent**: an asset that exists is updated in place, never duplicated.
-# MAGIC You load historical POs directly into `<catalog>.<schema>.extracted_pdf_datas` (from Oracle) —
+# MAGIC | Step | What it installs | Behaviour |
+# MAGIC |---|---|---|
+# MAGIC | 1 | **Configuration** | the one place you set catalog / schema / model / endpoint / warehouse / app |
+# MAGIC | 2 | Catalog · schema · landing volume | create if missing (never overwritten) |
+# MAGIC | 3 | 3 Unity Catalog functions (`cross_unit_history`, `recommend_vendor`, `price_fairness`) | `CREATE OR REPLACE` — refreshed every run |
+# MAGIC | 4 | ML model (scikit-learn + MLflow, alias `@prod`) | train if missing; **retrain when `UPDATE_ASSETS = True`** |
+# MAGIC | 5 | Model serving endpoint | create, or update to the latest `@prod` |
+# MAGIC | 6 | Lakebase project (conversation history + feedback, 7-day) | create if missing |
+# MAGIC | 7 | The CAPEX app | prints the exact deploy commands, pre-filled from §1 |
+# MAGIC
+# MAGIC Every step is **idempotent** — an asset that exists is updated in place, never duplicated.
+# MAGIC You load historical POs directly into `<catalog>.<schema>.extracted_pdf_datas` (e.g. from Oracle);
 # MAGIC this installer never parses PDFs for historical data and never overwrites that table.
 
 # COMMAND ----------
@@ -30,31 +34,44 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog", "purchase_capex_catalog", "Catalog")
-dbutils.widgets.text("schema", "gold", "Schema")
-dbutils.widgets.text("volume", "landing", "Landing volume")
-dbutils.widgets.text("model_name", "capex_worth_it", "Registered model name")
-dbutils.widgets.text("endpoint", "capex-worth-it", "Model serving endpoint")
-dbutils.widgets.text("lakebase_project", "capex-v2", "Lakebase project")
-dbutils.widgets.dropdown("update_assets", "no", ["no", "yes"], "Update existing assets (retrain model)")
+# ══════════════════════════════════════════════════════════════════════════════
+#  CONFIGURATION — the ONLY cell you edit. Set these for your environment, Run All.
+#  Every step below AND the app (step 7) use exactly these values.
+# ══════════════════════════════════════════════════════════════════════════════
 
-CATALOG = dbutils.widgets.get("catalog").strip()
-SCHEMA = dbutils.widgets.get("schema").strip()
-VOLUME = dbutils.widgets.get("volume").strip()
-MODEL_NAME = dbutils.widgets.get("model_name").strip()
-ENDPOINT = dbutils.widgets.get("endpoint").strip()
-LAKEBASE_PROJECT = dbutils.widgets.get("lakebase_project").strip()
-# "yes" refreshes assets from a prior (v1) install — chiefly retraining/re-registering the model.
-# UC functions and the serving endpoint are refreshed on every run regardless of this flag.
-UPDATE_ASSETS = dbutils.widgets.get("update_assets").strip() == "yes"
+# --- Where everything lives (Unity Catalog) ------------------------------------
+CATALOG          = "kauvey_poc"       # your Unity Catalog
+SCHEMA           = "gold"             # schema holding ALL CAPEX assets: history table, functions, model
+VOLUME           = "landing"          # UC Volume where uploaded quotation PDFs land
 
-FULL_MODEL = f"{CATALOG}.{SCHEMA}.{MODEL_NAME}"
-HIST_TABLE = f"{CATALOG}.{SCHEMA}.extracted_pdf_datas"
+# --- ML asset names ------------------------------------------------------------
+MODEL_NAME       = "capex_worth_it"   # registered model (Unity Catalog)
+ENDPOINT         = "capex-worth-it"   # model serving endpoint (lowercase + hyphens, <= 63 chars)
+
+# --- Conversation history + feedback ------------------------------------------
+LAKEBASE_PROJECT = "capex-v2"         # Lakebase (Postgres) project
+
+# --- Foundation models the app calls ------------------------------------------
+CHAT_MODEL       = "databricks-claude-sonnet-4-5"   # agent chat model — MUST support tool-calling (Claude)
+EXTRACT_MODEL    = "databricks-llama-4-maverick"    # PDF field extraction — MUST support ai_query json_object (Llama/GPT; Claude does NOT)
+
+# --- App + compute -------------------------------------------------------------
+APP_NAME         = "capex-quote-review"   # Databricks App name (lowercase + hyphens, <= 26 chars)
+WAREHOUSE_ID     = ""                     # SQL warehouse id (Compute → SQL Warehouses → your warehouse → copy ID)
+
+# --- Re-install / upgrade ------------------------------------------------------
+UPDATE_ASSETS    = False   # True  → retrain & re-register an EXISTING model (v1 → v2 upgrade)
+                           # False → create-if-missing (safe first install). Functions + endpoint refresh either way.
+
+# ── nothing below this line needs editing ─────────────────────────────────────
+FULL_MODEL      = f"{CATALOG}.{SCHEMA}.{MODEL_NAME}"
+HIST_TABLE      = f"{CATALOG}.{SCHEMA}.extracted_pdf_datas"
+LAKEBASE_SCHEMA = "capex_app"   # Postgres schema the app's service principal creates & owns
 
 from databricks.sdk import WorkspaceClient
 w = WorkspaceClient()
 print("Running as:", w.current_user.me().user_name)
-print("Target     :", f"{CATALOG}.{SCHEMA}  · model {MODEL_NAME}  · endpoint {ENDPOINT}")
+print("Target     :", f"{CATALOG}.{SCHEMA}  · model {MODEL_NAME}  · endpoint {ENDPOINT}  · app {APP_NAME}")
 
 # COMMAND ----------
 
@@ -142,8 +159,8 @@ print("functions ready: cross_unit_history, recommend_vendor, price_fairness")
 # MAGIC ## 4 · ML model  (train if missing, or retrain when *Update existing assets* = yes)
 # MAGIC If `capex_worth_it` isn't registered yet, this runs the training notebook against your real data
 # MAGIC (`data_source=real`). If it **already exists** (a prior v1 install) it's left as-is — **unless** you set
-# MAGIC the **Update existing assets** widget to `yes`, which retrains and re-registers `@prod` (use this to pick
-# MAGIC up model/logic changes, e.g. the removal of equipment categories). The training notebook lives at
+# MAGIC **`UPDATE_ASSETS = True`** in §1, which retrains and re-registers `@prod` (use this to pick up
+# MAGIC model/logic changes, e.g. the removal of equipment categories). The training notebook lives at
 # MAGIC `../notebooks/capex_phase2_demo` — resolves when the repo is imported as a **Git folder**. If you imported
 # MAGIC notebooks individually, set `TRAIN_NOTEBOOK_PATH` below to its actual path.
 
@@ -161,7 +178,7 @@ except Exception:
     model_exists = False
 
 if model_exists and not UPDATE_ASSETS:
-    print(f"{FULL_MODEL} already registered — leaving it (set 'Update existing assets' = yes to retrain).")
+    print(f"{FULL_MODEL} already registered — leaving it (set UPDATE_ASSETS = True in §1 to retrain).")
 else:
     reason = "retraining (update mode)" if model_exists else "not found — training"
     print(f"{FULL_MODEL} {reason} via {TRAIN_NOTEBOOK_PATH} …")
@@ -231,17 +248,55 @@ except Exception as e:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 7 · Deploy the app
-# MAGIC The app is deployed from source (a build step), so it's the one piece done from the CLI, once:
-# MAGIC
-# MAGIC ```bash
-# MAGIC cd app-v2 && databricks bundle deploy -t prod && databricks bundle run capex_copilot -t prod
-# MAGIC ```
-# MAGIC Set `catalog`, `schema`, `warehouse_id`, and the Lakebase project in `app-v2/databricks.yml` first.
-# MAGIC After it's created once, redeploys keep the same URL.
+# MAGIC ## 7 · Deploy the CAPEX app  (pre-filled from §1 — so the app can't drift from the backend)
+# MAGIC The app is built from source, so this one step runs from a terminal with the Databricks CLI.
+# MAGIC The cell below prints — **already filled in with your §1 values** — the `app.yaml` env block, the
+# MAGIC service-principal grants (`resources.json`), and the exact deploy commands. Copy/paste them from the
+# MAGIC repo root. Re-deploys keep the same URL. (`app.yaml` ships matching the §1 defaults; only update it
+# MAGIC if you changed §1.)
 
 # COMMAND ----------
 
-print("✅ Backend install complete for", f"{CATALOG}.{SCHEMA}")
-print("   Re-run this notebook any time — existing assets are updated, not duplicated.")
-print("   Last step: deploy the app (cell 7).")
+import json
+USER = w.current_user.me().user_name
+# Adjust the folder name if your Git folder isn't "kauvery-capex-poc".
+WS_APP_PATH = f"/Workspace/Users/{USER}/kauvery-capex-poc/app-v2"
+
+# app env (app-v2/app.yaml) — generated from §1 so it matches the backend exactly
+app_env = {
+    "MLFLOW_TRACKING_URI": "databricks", "MLFLOW_REGISTRY_URI": "databricks-uc",
+    "CHAT_PROXY_TIMEOUT_SECONDS": "300",
+    "CATALOG": CATALOG, "SCHEMA": SCHEMA, "MODEL_ENDPOINT": ENDPOINT,
+    "CHAT_MODEL": CHAT_MODEL, "EXTRACT_MODEL": EXTRACT_MODEL, "LAKEBASE_SCHEMA": LAKEBASE_SCHEMA,
+}
+# resources the app service principal is granted
+resources = {"update_mask": "resources", "app": {"resources": [
+    {"name": "chat-llm",       "serving_endpoint": {"name": CHAT_MODEL,    "permission": "CAN_QUERY"}},
+    {"name": "extract-llm",    "serving_endpoint": {"name": EXTRACT_MODEL, "permission": "CAN_QUERY"}},
+    {"name": "model-endpoint", "serving_endpoint": {"name": ENDPOINT,      "permission": "CAN_QUERY"}},
+    {"name": "sql-warehouse",  "sql_warehouse":    {"id": WAREHOUSE_ID,    "permission": "CAN_USE"}},
+    {"name": "postgres",       "postgres": {
+        "branch":   f"projects/{LAKEBASE_PROJECT}/branches/production",
+        "database": f"projects/{LAKEBASE_PROJECT}/branches/production/databases/databricks-postgres",
+        "permission": "CAN_CONNECT_AND_CREATE"}},
+]}}
+
+print("── 1. app-v2/app.yaml env  (matches §1; update app.yaml only if you changed §1) ──")
+print('command: ["uv", "run", "start-server"]\nenv:')
+for k, v in app_env.items():
+    print(f'  - name: {k}\n    value: "{v}"')
+print('  - name: DATABRICKS_WAREHOUSE_ID\n    valueFrom: "sql-warehouse"')
+
+print("\n── 2. resources.json  (app service-principal grants) ──")
+print(json.dumps(resources, indent=2))
+
+print("\n── 3. run from the repo root (terminal, Databricks CLI) ──")
+print(f"databricks apps create {APP_NAME}                                  # once; skip if it exists")
+print(f"databricks sync app-v2 {WS_APP_PATH}")
+print(f"databricks apps deploy {APP_NAME} --source-code-path {WS_APP_PATH}")
+print(f"databricks apps create-update {APP_NAME} --json @resources.json    # attach the grants above")
+print(f"databricks apps deploy {APP_NAME} --source-code-path {WS_APP_PATH} # redeploy so the SP owns its Lakebase schema")
+
+if not WAREHOUSE_ID:
+    print("\n[action needed] WAREHOUSE_ID is empty in §1 — set it, or the sql-warehouse grant fails.")
+print(f"\n✅ Backend install complete for {CATALOG}.{SCHEMA}. Deploy the app with the commands above.")
