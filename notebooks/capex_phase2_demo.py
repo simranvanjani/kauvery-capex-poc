@@ -14,7 +14,7 @@
 # MAGIC | 1 | **Config** via widgets (catalog / schema / model name) |
 # MAGIC | 2 | **Phase-1 foundation** — creates the ~70-column historical PO catalog (`extracted_pdf_datas`) with realistic synthetic data |
 # MAGIC | 3 | **Reference BOM + benchmark index** — derived from history (what a complete purchase looks like, and the price/warranty/AMC norms per equipment category) |
-# MAGIC | 4 | **Upload & ingest** — generates a sample quotation PDF, parses it with `ai_parse_document` + `ai_extract` |
+# MAGIC | 4 | **Placeholder quote** — one structured row for the model signature (no PDF parsing) |
 # MAGIC | 5 | **Custom ML model** — a scikit-learn model that scores a quotation 0–100 (Accept / Negotiate / Reject), logged to MLflow and registered to Unity Catalog |
 # MAGIC | 6 | **Gap detection** — deterministic set-difference vs the Reference BOM, every flag carries a citation to a historical PO + page |
 # MAGIC | 7 | **End-to-end demo** — scores the sample quote, writes a comparison sheet to Delta |
@@ -461,20 +461,17 @@ print("example CT Scanner benchmark:", json.dumps(benchmark_index["by_category"]
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 4 · Upload & ingest — sample quotation PDF → `ai_parse_document` → `ai_extract`
+# MAGIC ## 4 · Placeholder quote (for the model signature)
 # MAGIC
-# MAGIC A vendor sends a quotation as a PDF. We drop it in the UC Volume landing zone, then parse it with Databricks'
-# MAGIC Foundation-Model document intelligence. The sample below is deliberately **weak** (short warranty, no AMC, no FOC,
-# MAGIC 100% advance) so the gaps and verdict are obvious.
+# MAGIC **No PDF parsing in the notebook** — historical data is tabular, and live vendor quotations are parsed
+# MAGIC by the app. This is a single structured example row so MLflow can infer the model's input signature.
 
 # COMMAND ----------
 
-from fpdf import FPDF
-
 quote = {
-    "vendor_name": "Medingenious Solutions",
-    "unit_name": "Kauvery Chennai (Alwarpet)",
-    "quote_ref": "QT-MEDG-2026-4471", "quote_date": "05/09/26",
+    "vendor_name": "Example Vendor",
+    "unit_name": "Kauvery (example)",
+    "quote_ref": "SAMPLE-0001", "quote_date": "05/09/26",
     "lines": [
         {"item_description": "Philips IntelliVue MX450 Patient Monitor", "make_brand": "Philips",
          "model_no": "IntelliVue MX450", "qty": 10, "unit_rate": 415000, "warranty_months": 12,
@@ -483,59 +480,13 @@ quote = {
     ],
 }
 
-pdf = FPDF()
-pdf.add_page()
-pdf.set_font("Helvetica", "B", 15)
-pdf.cell(0, 10, "QUOTATION", ln=True)
-pdf.set_font("Helvetica", "", 10)
-pdf.cell(0, 6, f"From: {quote['vendor_name']}", ln=True)
-pdf.cell(0, 6, f"To: Kauvery Hospitals - {quote['unit_name']}", ln=True)
-pdf.cell(0, 6, f"Quote Ref: {quote['quote_ref']}   Date: {quote['quote_date']}", ln=True)
-pdf.ln(4)
-pdf.set_font("Helvetica", "B", 10)
-pdf.cell(0, 6, "Line Items", ln=True)
-pdf.set_font("Helvetica", "", 9)
-for l in quote["lines"]:
-    pdf.multi_cell(0, 5, (f"- {l['item_description']} (Model {l['model_no']}, Brand {l['make_brand']}) | "
-                          f"Qty {l['qty']} | Unit Rate INR {l['unit_rate']:,} | Warranty {l['warranty_months']} months"))
-pdf.ln(2)
-pdf.multi_cell(0, 5, "Commercial terms: Payment 100% advance. Delivery in 95 days. "
-                     "No AMC/CMC quoted. No free-of-cost accessories. Installation by OEM engineer included. "
-                     "No application training package included in this offer.")
-pdf_path = f"{VOLUME_PATH}/sample_quote_patient_monitor.pdf"
-pdf.output(pdf_path)
-print(f"Wrote sample quotation PDF -> {pdf_path}")
-
-# COMMAND ----------
-
-# Parse the PDF with ai_parse_document, then pull structured fields with ai_query (JSON schema).
-# Best-effort: if the runtime doesn't support the document-intelligence functions, we fall back to the
-# structured quote above so the demo always completes.
-from pyspark.sql import functions as F
-
-parsed_ok = False
-try:
-    raw = spark.read.format("binaryFile").load(pdf_path)
-    raw.createOrReplaceTempView("raw_quote_pdf")
-    parsed = spark.sql("""
-        SELECT concat_ws('\n', transform(ai_parse_document(content):document:elements,
-                                          e -> e:content::STRING)) AS text_blocks
-        FROM raw_quote_pdf
-    """)
-    text_blocks = parsed.collect()[0]["text_blocks"]
-    print("---- ai_parse_document extracted text ----")
-    print((text_blocks or "")[:800])
-    parsed_ok = bool(text_blocks and text_blocks.strip())
-except Exception as e:
-    print(f"[info] ai_parse_document unavailable on this compute ({e}). Falling back to structured quote.")
-
-# Build the structured quote DataFrame the model scores (mirrors the PDF).
+# One structured row the model scores (drives the MLflow signature). No PDF, no ai_parse_document.
 quote_rows = []
 for l in quote["lines"]:
     r = dict(l); r["vendor_name"] = quote["vendor_name"]; r["unit_name"] = quote["unit_name"]
     quote_rows.append(r)
 quote_df = pd.DataFrame(quote_rows)
-print("\nStructured quote to score:")
+print("Structured example for the model signature:")
 print(quote_df.to_string(index=False))
 
 # COMMAND ----------
