@@ -253,14 +253,15 @@ else:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 7 · Deploy the CAPEX app  (config written from §1 — the app can't drift from the backend)
-# MAGIC The cell below **writes `app-v2/app.yaml` from your §1 values** (so the app always matches the backend),
-# MAGIC then prints the service-principal grants (`resources.json`) and the exact deploy commands. Run those from
-# MAGIC a terminal with the Databricks CLI; the app source is already in this Git folder. Re-deploys keep the same URL.
+# MAGIC ## 7 · Deploy the CAPEX app  (built / reused **and deployed** from this notebook)
+# MAGIC The cell below writes `app-v2/app.yaml` from your §1 values, then **creates the app (or reuses it if it
+# MAGIC already exists), attaches the service-principal grants, and deploys the code** via the Apps API — no
+# MAGIC terminal needed. If the auto-deploy can't complete in your workspace it prints the equivalent CLI commands
+# MAGIC to run instead. Re-runs redeploy the latest code and keep the same URL.
 
 # COMMAND ----------
 
-import json, os
+import json, os, time
 
 # app-v2/app.yaml, generated from §1 so the app always matches the backend
 _env = [
@@ -288,8 +289,8 @@ except Exception as e:
     print(f"[note] couldn't auto-write app.yaml: {_brief(e)} — paste this into app-v2/app.yaml:\n\n{app_yaml}")
     WS_APP_PATH = "/Workspace/Users/<you>/kauvery-capex-poc/app-v2"
 
-# Service-principal grants (save as resources.json, then attach with create-update)
-resources = {"update_mask": "resources", "app": {"resources": [
+# --- 2. service-principal grants (endpoints + warehouse + Lakebase) ---
+res_list = [
     {"name": "chat-llm",       "serving_endpoint": {"name": CHAT_MODEL,    "permission": "CAN_QUERY"}},
     {"name": "extract-llm",    "serving_endpoint": {"name": EXTRACT_MODEL, "permission": "CAN_QUERY"}},
     {"name": "model-endpoint", "serving_endpoint": {"name": ENDPOINT,      "permission": "CAN_QUERY"}},
@@ -298,15 +299,60 @@ resources = {"update_mask": "resources", "app": {"resources": [
         "branch":   f"projects/{LAKEBASE_PROJECT}/branches/production",
         "database": f"projects/{LAKEBASE_PROJECT}/branches/production/databases/databricks-postgres",
         "permission": "CAN_CONNECT_AND_CREATE"}},
-]}}
-print("── resources.json (app service-principal grants) ──")
-print(json.dumps(resources, indent=2))
+]
 
-print("\n── deploy from a terminal with the Databricks CLI (source is already in this Git folder) ──")
-print(f"databricks apps create {APP_NAME}                                  # once; skip if it exists")
-print(f"databricks apps deploy {APP_NAME} --source-code-path {WS_APP_PATH}")
-print(f"databricks apps create-update {APP_NAME} --json @resources.json    # attach the grants above")
-print(f"databricks apps deploy {APP_NAME} --source-code-path {WS_APP_PATH} # redeploy so the SP owns its Lakebase schema")
+def _print_cli():
+    print("\n── or deploy from a terminal (source is already in this Git folder) ──")
+    print(f"databricks apps create {APP_NAME}")
+    print(f"databricks apps deploy {APP_NAME} --source-code-path {WS_APP_PATH}")
+    print("cat > resources.json <<'JSON'")
+    print(json.dumps({"update_mask": "resources", "app": {"resources": res_list}}, indent=2))
+    print("JSON")
+    print(f"databricks apps create-update {APP_NAME} --json @resources.json")
+    print(f"databricks apps deploy {APP_NAME} --source-code-path {WS_APP_PATH}")
+
+# --- 3. build-or-reuse the app, attach grants, deploy the code (Apps API; CLI fallback on any error) ---
 if not WAREHOUSE_ID:
-    print("\n[action needed] WAREHOUSE_ID is empty in §1 — set it, or the sql-warehouse grant fails.")
+    print("\n[action needed] WAREHOUSE_ID is empty in §1 — set it, then re-run. Skipping auto-deploy.")
+    _print_cli()
+elif not WS_APP_PATH or WS_APP_PATH.endswith("<you>/kauvery-capex-poc/app-v2"):
+    print("\n[note] couldn't resolve this Git folder's path — deploy with the CLI below.")
+    _print_cli()
+else:
+    def _api(method, path, body=None, query=None):
+        return w.api_client.do(method, path, body=body, query=query)
+    try:
+        try:
+            _api("GET", f"/api/2.0/apps/{APP_NAME}")
+            print(f"reusing existing app '{APP_NAME}'")
+        except Exception:
+            print(f"creating app '{APP_NAME}' … (compute provisioning, ~1–2 min)")
+            _api("POST", "/api/2.0/apps", body={"name": APP_NAME, "description": "Kauvery CAPEX Copilot"})
+            for _ in range(60):
+                if _api("GET", f"/api/2.0/apps/{APP_NAME}").get("compute_status", {}).get("state") in ("ACTIVE", "ERROR"):
+                    break
+                time.sleep(5)
+        # attach grants BEFORE deploy so the app's SP owns the Lakebase schema when it starts
+        _api("PATCH", f"/api/2.0/apps/{APP_NAME}", body={"name": APP_NAME, "resources": res_list},
+             query={"update_mask": "resources"})
+        print("attached resource grants (endpoints + warehouse + Lakebase)")
+        print("deploying code …")
+        dep = _api("POST", f"/api/2.0/apps/{APP_NAME}/deployments",
+                   body={"source_code_path": WS_APP_PATH, "mode": "SNAPSHOT"})
+        dep_id = dep.get("deployment_id")
+        state = "PENDING"
+        for _ in range(120):
+            state = _api("GET", f"/api/2.0/apps/{APP_NAME}/deployments/{dep_id}").get("status", {}).get("state", "")
+            if state in ("SUCCEEDED", "FAILED", "STOPPED"):
+                break
+            time.sleep(5)
+        app = _api("GET", f"/api/2.0/apps/{APP_NAME}")
+        print(f"\n✅ deploy {state} · app state {app.get('app_status', {}).get('state')}")
+        print(f"   URL: {app.get('url')}")
+        if state != "SUCCEEDED":
+            _print_cli()
+    except Exception as e:
+        print(f"\n[auto-deploy didn't complete: {_brief(e)}]")
+        _print_cli()
+
 print(f"\n✅ Backend install complete for {CATALOG}.{SCHEMA}.")
