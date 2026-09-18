@@ -172,20 +172,29 @@ except Exception:
 # COMMAND ----------
 
 from databricks.sdk.service.serving import EndpointCoreConfigInput, ServedEntityInput
+from mlflow.tracking import MlflowClient
 
-entity = ServedEntityInput(entity_name=FULL_MODEL, entity_version=None, entity_alias="prod",
-                           scale_to_zero_enabled=True, workload_size="Small")
 try:
-    w.serving_endpoints.get(ENDPOINT)
-    print(f"{ENDPOINT} exists — updating to {FULL_MODEL}@prod")
-    w.serving_endpoints.update_config(name=ENDPOINT, served_entities=[entity])
-except Exception:
-    print(f"creating {ENDPOINT} -> {FULL_MODEL}@prod")
+    # ServedEntityInput takes a concrete entity_version, not an alias — resolve @prod to a version.
+    prod_version = MlflowClient(registry_uri="databricks-uc").get_model_version_by_alias(FULL_MODEL, "prod").version
+    entity = ServedEntityInput(entity_name=FULL_MODEL, entity_version=prod_version,
+                               scale_to_zero_enabled=True, workload_size="Small")
+
+    endpoint_exists = True
     try:
+        w.serving_endpoints.get(ENDPOINT)
+    except Exception:
+        endpoint_exists = False
+
+    if endpoint_exists:
+        print(f"{ENDPOINT} exists — updating to {FULL_MODEL} v{prod_version} (@prod)")
+        w.serving_endpoints.update_config(name=ENDPOINT, served_entities=[entity])
+    else:
+        print(f"creating {ENDPOINT} -> {FULL_MODEL} v{prod_version} (@prod)")
         w.serving_endpoints.create(name=ENDPOINT, config=EndpointCoreConfigInput(served_entities=[entity]))
-    except Exception as e:
-        print(f"[action needed] endpoint create failed ({e}). If the model isn't trained yet, "
-              f"finish step 4 then re-run this cell.")
+except Exception as e:
+    print(f"[action needed] endpoint step failed ({e}). If the model isn't trained yet or has no @prod "
+          f"alias, finish step 4 then re-run this cell.")
 
 # COMMAND ----------
 
