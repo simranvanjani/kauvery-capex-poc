@@ -247,85 +247,10 @@
     <!-- CHAT -->
     <section class="view" id="chatView">
       <div class="thread">
-        <div class="turn user">
-          <div class="role-tag">You</div>
-          <p>Please review this quotation.</p>
-          <div class="filechip"><span class="fx">PDF</span> 1019213-Syringe&nbsp;Pump-vTitan.pdf</div>
-        </div>
-
-        <div class="turn bot">
+        <div class="turn bot" id="welcome">
           <div class="role-tag">CAPEX Copilot</div>
-          <p class="lead">I read the quotation and compared it against Kauvery's purchase history. Here's the review:</p>
-
-          <div class="review">
-            <div class="review-head">
-              <div>
-                <div class="item">vTitan V-Syringe Pump · VP-2000</div>
-                <div class="qp">Medingenious Solutions · Qty 10 · ₹4,15,000 / unit</div>
-              </div>
-              <span class="verdict negotiate">Negotiate <span class="score">54/100</span></span>
-            </div>
-
-            <div class="rsec">
-              <h4>Price fairness</h4>
-              <div class="fair">
-                <span class="big">+11.6%</span>
-                <span class="cmp">above the most-recent comparable purchase — ₹3,72,000, PO KH/CHN/2025-0417 (Chennai).</span>
-              </div>
-            </div>
-
-            <div class="rsec">
-              <h4>Gaps found</h4>
-              <ul class="gaps">
-                <li><span class="sev high">High</span><div>No AMC/CMC quoted.<span class="cite">Benchmark: PO KH/CBE/2024-1183 (Coimbatore) included 2-yr CAMC · p.6</span></div></li>
-                <li><span class="sev high">High</span><div>Warranty 12 months — below the expected 24 for syringe pumps.<span class="cite">Benchmark: PO KH/CHN/2025-0417 · p.4</span></div></li>
-                <li><span class="sev med">Medium</span><div>No free-of-cost starter syringe sets offered.<span class="cite">Benchmark: PO KH/TRY/2024-0902 · p.3</span></div></li>
-                <li><span class="sev med">Medium</span><div>Payment 100% advance — historical norm is on-installation.</div></li>
-              </ul>
-            </div>
-
-            <div class="rsec">
-              <h4>Cross-site history</h4>
-              <div class="tablewrap">
-                <table>
-                  <thead><tr><th>Site</th><th>Vendor</th><th>Date</th><th class="num">Unit price</th><th>Warranty</th><th>Maintenance</th><th>FOC</th></tr></thead>
-                  <tbody>
-                    <tr class="best"><td>Trichy</td><td>MediSpan Health<span class="tag-best">BEST</span></td><td>Aug 2024</td><td class="num">₹3,58,000</td><td>24 mo</td><td>2-yr CAMC</td><td>Yes</td></tr>
-                    <tr><td>Chennai</td><td>Medingenious</td><td>Apr 2025</td><td class="num">₹3,72,000</td><td>24 mo</td><td>1-yr AMC</td><td>Yes</td></tr>
-                    <tr><td>Coimbatore</td><td>B Braun India</td><td>Nov 2024</td><td class="num">₹3,95,000</td><td>36 mo</td><td>2-yr CAMC</td><td>No</td></tr>
-                    <tr><td>Chennai</td><td>Medingenious</td><td>this quote</td><td class="num">₹4,15,000</td><td>12 mo</td><td>None</td><td>No</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div class="rsec">
-              <h4>Recommendation</h4>
-              <p class="rec">Open at <b>₹3,72,000</b> and require <b>24-month warranty + 2-yr CAMC + FOC syringe sets</b> before accepting. <b>MediSpan Health</b> has the best bundled value historically — worth a parallel quote for leverage.</p>
-            </div>
-          </div>
-
-          <div class="msg-actions">
-            <span class="fb-label">Helpful?</span>
-            <button class="iconbtn up" aria-label="Helpful" onclick="fb(this,'up')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v11M2 12v7a2 2 0 0 0 2 2h13.3a2 2 0 0 0 2-1.7l1.1-7a2 2 0 0 0-2-2.3H14V5a2 2 0 0 0-2-2l-3 7"/></svg>
-            </button>
-            <button class="iconbtn down" aria-label="Not helpful" onclick="fb(this,'down')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V3M22 12V5a2 2 0 0 0-2-2H6.7a2 2 0 0 0-2 1.7l-1.1 7A2 2 0 0 0 5.6 14H10v4a2 2 0 0 0 2 2l3-7"/></svg>
-            </button>
-            <button class="iconbtn copy" aria-label="Copy review" title="Copy review" onclick="copyReview(this)">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
-            </button>
-          </div>
-
-          <div class="fb-note" id="fbNote" hidden>
-            <label for="fbNoteText">What went wrong with this review?</label>
-            <textarea id="fbNoteText" rows="2" placeholder="e.g. missed a line item, wrong benchmark, or the gaps were off"></textarea>
-            <div class="fb-note-actions">
-              <button class="fb-cancel" onclick="closeFbNote()">Cancel</button>
-              <button class="fb-submit" onclick="submitFbNote()">Send feedback</button>
-            </div>
-          </div>
+          <p class="lead">Attach a quotation PDF, or paste the quote as text, and I'll review it against Kauvery's
+            purchase history — price fairness, gaps, a cross-site comparison, and a negotiation recommendation.</p>
         </div>
       </div>
 
