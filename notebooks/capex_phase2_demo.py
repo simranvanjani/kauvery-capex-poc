@@ -12,8 +12,8 @@
 # MAGIC | Step | What it does |
 # MAGIC |---|---|
 # MAGIC | 1 | **Config** via widgets (catalog / schema / model name) |
-# MAGIC | 2 | **Phase-1 foundation** — creates the ~70-column historical PO catalog (`extracted_pdf_datas`) with realistic synthetic data |
-# MAGIC | 3 | **Reference BOM + benchmark index** — derived from history (what a complete purchase looks like, and the price/warranty/AMC norms per equipment category) |
+# MAGIC | 2 | **Load history** — reads your real ~70-column PO catalog (`extracted_pdf_datas`, ingested from Oracle) |
+# MAGIC | 3 | **Reference BOM + benchmark index** — derived from your history (what a complete purchase looks like, and the price/warranty/AMC norms) |
 # MAGIC | 4 | **Placeholder quote** — one structured row for the model signature (no PDF parsing) |
 # MAGIC | 5 | **Custom ML model** — a scikit-learn model that scores a quotation 0–100 (Accept / Negotiate / Reject), logged to MLflow and registered to Unity Catalog |
 # MAGIC | 6 | **Gap detection** — deterministic set-difference vs the Reference BOM, every flag carries a citation to a historical PO + page |
@@ -44,16 +44,10 @@
 dbutils.widgets.text("catalog", "kauvey_poc", "Catalog")
 dbutils.widgets.text("schema", "gold", "Schema")
 dbutils.widgets.text("model_name", "capex_worth_it", "Registered model name")
-dbutils.widgets.text("n_pos", "6000", "Number of historical POs to generate")
-# V2: the customer loads historical POs directly into extracted_pdf_datas (from Oracle) — no PDF parsing.
-# "real" reads that table; "synthetic" generates demo history (default, for the standalone demo).
-dbutils.widgets.dropdown("data_source", "synthetic", ["synthetic", "real"], "Historical data source")
 
 CATALOG = dbutils.widgets.get("catalog").strip()
 SCHEMA = dbutils.widgets.get("schema").strip()
 MODEL_NAME = dbutils.widgets.get("model_name").strip()
-N_POS = int(dbutils.widgets.get("n_pos"))
-DATA_SOURCE = dbutils.widgets.get("data_source").strip()
 
 HIST_TABLE = f"{CATALOG}.{SCHEMA}.extracted_pdf_datas"
 COMPARISON_TABLE = f"{CATALOG}.{SCHEMA}.quote_comparison_sheets"
@@ -91,284 +85,24 @@ print("catalog / schema / volume ready")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 2 · Phase-1 foundation — synthetic historical PO catalog
-# MAGIC
-# MAGIC `extracted_pdf_datas` mirrors the customer's exact schema (one row per PO line item, ~70 columns,
-# MAGIC sourced from old SAP + Oracle finalized capex POs). We synthesise a realistic 10-year history across
-# MAGIC Kauvery units, vendors, and equipment categories, with genuine signal:
-# MAGIC
-# MAGIC - **Price** trends up year over year, varies by brand and vendor.
-# MAGIC - **Warranty / AMC / FOC** are present on *most* finalized purchases (they were negotiated) but not all — which is exactly what makes a new quote's omissions visible.
-# MAGIC
-# MAGIC > Replace this whole section with a read of the customer's real table and everything downstream still works.
+# MAGIC ## 2 · Load historical data
+# MAGIC The customer ingests historical POs **directly into `extracted_pdf_datas`** (from Oracle) — no PDF parsing.
+# MAGIC This reads that table into `hist_pdf` for the benchmark step. It must contain: `unit_rate, po_date, model_no,
+# MAGIC make_brand, po_number, unit_name, warranty_months, amc_value, camc_value, foc_details, special_instructions,
+# MAGIC source_file_name` (rename to match).
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ### 2 · REAL-DATA MODE  (`data_source = real`) — run THIS cell, then SKIP the synthetic cells below
-# MAGIC The customer ingests historical POs **directly into `extracted_pdf_datas`** (from Oracle) — **no PDF parsing
-# MAGIC in the pipeline**. This reads that real table into `hist_pdf` for the benchmark step.
-# MAGIC
-# MAGIC **V2: categories are optional.** Benchmarks match on `model_no` + `make_brand`; if the real table has an
-# MAGIC equipment-type column, point `CATEGORY_COL` at it, otherwise everything uses the single universal Reference BOM.
-# MAGIC The real table must contain: `unit_rate, po_date, model_no, make_brand, po_number, unit_name,
-# MAGIC warranty_months, amc_value, camc_value, foc_details, special_instructions, source_file_name` (rename to match).
+import pandas as pd, numpy as np
 
-# COMMAND ----------
-
-if DATA_SOURCE == "real":
-    import pandas as pd, numpy as np
-    hist_pdf = spark.table(HIST_TABLE).toPandas()   # real, tabular history — no PDF parsing
-    CATEGORY_COL = ""   # <- set to your equipment-type column if you have one (e.g. "equipment_type"); else leave blank
-    if CATEGORY_COL and CATEGORY_COL in hist_pdf.columns:
-        hist_pdf["_category"] = hist_pdf[CATEGORY_COL].fillna("General")
-    else:
-        hist_pdf["_category"] = "General"           # universal BOM; benchmark matches on model_no + make_brand
-    hist_pdf["po_date"] = pd.to_datetime(hist_pdf["po_date"], errors="coerce").dt.strftime("%d/%m/%y")
-    missing = [c for c in ["unit_rate","po_date","model_no","make_brand","po_number","unit_name",
-                           "warranty_months","amc_value","camc_value","foc_details",
-                           "special_instructions","source_file_name"] if c not in hist_pdf.columns]
-    assert not missing, f"real table {HIST_TABLE} is missing columns the benchmark needs: {missing}"
-    print(f"REAL MODE: loaded {len(hist_pdf):,} rows from {HIST_TABLE}. Skip the synthetic cells below; go to Section 3.")
-else:
-    print("SYNTHETIC MODE: run the cells below to generate demo history.")
-
-# COMMAND ----------
-
-import numpy as np
-import pandas as pd
-from datetime import datetime, timedelta, timezone
-
-np.random.seed(42)
-_NOW = datetime.now(timezone.utc)   # tz-aware: Spark Connect rejects tz-naive timestamps
-
-# Equipment catalog: base INR price, price sigma, and brand -> models
-CATALOG_SPEC = {
-    "Patient Monitor":        {"base": 3.5e5,  "sigma": 0.12, "qty": (1, 12),
-        "brands": {"Philips": ["IntelliVue MX450", "IntelliVue MX550"], "GE Healthcare": ["B450", "B650"],
-                   "Mindray": ["uMEC12", "BeneVision N12"], "Nihon Kohden": ["BSM-3562"]}},
-    "Ventilator":             {"base": 9.0e5,  "sigma": 0.11, "qty": (1, 6),
-        "brands": {"Draeger": ["Evita V600", "Evita V300"], "Hamilton": ["Hamilton C6"], "Philips": ["Trilogy Evo"]}},
-    "Infusion Pump":          {"base": 1.2e5,  "sigma": 0.12, "qty": (2, 20),
-        "brands": {"B Braun": ["Infusomat Space"], "Baxter": ["Sigma Spectrum"], "Mindray": ["BeneFusion"]}},
-    "Ultrasound":             {"base": 2.5e6,  "sigma": 0.10, "qty": (1, 3),
-        "brands": {"GE Healthcare": ["Voluson E10", "LOGIQ E10"], "Philips": ["EPIQ Elite"], "Mindray": ["Resona R9"]}},
-    "Dialysis Machine":       {"base": 1.4e6,  "sigma": 0.10, "qty": (1, 8),
-        "brands": {"Fresenius": ["4008S", "5008S"], "Nipro": ["Surdial X"]}},
-    "Anesthesia Workstation": {"base": 2.2e6,  "sigma": 0.10, "qty": (1, 4),
-        "brands": {"Draeger": ["Perseus A500"], "GE Healthcare": ["Aisys CS2"]}},
-    "Defibrillator":          {"base": 4.5e5,  "sigma": 0.12, "qty": (1, 6),
-        "brands": {"Philips": ["HeartStart XL+"], "ZOLL": ["R Series"]}},
-    "CT Scanner":             {"base": 3.2e7,  "sigma": 0.08, "qty": (1, 1),
-        "brands": {"GE Healthcare": ["Revolution CT 128", "Revolution ACT"], "Siemens": ["SOMATOM go.Top"], "Philips": ["Ingenuity CT 128"]}},
-    "MRI":                    {"base": 6.5e7,  "sigma": 0.07, "qty": (1, 1),
-        "brands": {"Siemens": ["MAGNETOM Sola 1.5T"], "GE Healthcare": ["SIGNA Explorer 1.5T"], "Philips": ["Ingenia 1.5T"]}},
-    "Cath Lab":               {"base": 9.0e7,  "sigma": 0.07, "qty": (1, 1),
-        "brands": {"Philips": ["Azurion 7"], "Siemens": ["ARTIS icono"], "GE Healthcare": ["Allia IGS 7"]}},
-}
-# Realistic, varied free-of-cost inclusions per equipment category (was a single placeholder string).
-FOC_BY_CAT = {
-    "Patient Monitor": ["SpO2 + NIBP consumables (1 yr), 2 spare probes, wall mount",
-                        "ECG lead sets + NIBP cuffs starter pack, mounting kit",
-                        "1 yr consumables + spare SpO2 sensor"],
-    "Ventilator": ["Breathing circuits (6 mo), test lung, 10 HEPA filters",
-                   "Reusable + disposable circuits starter set, calibration kit"],
-    "Infusion Pump": ["IV administration sets starter pack (500), pole clamp",
-                      "Dedicated giving sets (250) + battery pack"],
-    "Ultrasound": ["2 transducers of choice, gel warmer, thermal paper (1 yr)",
-                   "Extra linear probe, DICOM licence, applications training (3 days)"],
-    "Dialysis Machine": ["Dialysers + bloodlines starter (100), concentrate connectors",
-                         "1 yr consumables kit + spare Hansen connectors"],
-    "Anesthesia Workstation": ["Circle absorber + soda lime (1 yr), spare flow sensor",
-                               "Reusable circuits, gas sampling lines, calibration gas"],
-    "Defibrillator": ["Adult + paediatric pads (2 yr), spare battery",
-                      "Multifunction electrode pads starter pack, carry case"],
-    "CT Scanner": ["Contrast injector consumables (1 yr), phantom + QA kit, applications training",
-                   "Coil/detector service kit, 1 yr software updates, 5 training days"],
-    "MRI": ["RF coil set, cryogen top-up (1 yr), applications training (5 days)",
-            "Head + spine coils, DICOM licence, 1 yr software subscription"],
-    "Cath Lab": ["Radiation aprons set, contrast injector consumables, 5 applications training days",
-                 "Sterile drapes starter (200), 1 yr software updates, physicist QA kit"],
-}
-# frequency weights — small equipment purchased far more often than big iron
-CAT_WEIGHTS = {"Patient Monitor": .22, "Ventilator": .14, "Infusion Pump": .18, "Ultrasound": .10,
-               "Dialysis Machine": .10, "Anesthesia Workstation": .08, "Defibrillator": .10,
-               "CT Scanner": .04, "MRI": .02, "Cath Lab": .02}
-
-UNITS = ["Kauvery Chennai (Alwarpet)", "Kauvery Chennai (Radial Rd)", "Kauvery Chennai (Vadapalani)",
-         "Kauvery Trichy (Cantonment)", "Kauvery Trichy (Tennur)", "Kauvery Hosur", "Kauvery Salem",
-         "Kauvery Bengaluru (Electronic City)", "Kauvery Bengaluru (Marathahalli)", "Kauvery Tirunelveli",
-         "Kauvery Karaikudi", "Kauvery Chromepet", "Kauvery Tennur (Heart City)", "Kauvery Coimbatore"]
-VENDOR_SPEC = {
-    "GE Healthcare": ("GEIN", "GEHEALTH@ge.com", "Rajesh Kumar"),
-    "Philips India": ("PHIL", "sales@philips.co.in", "Anita Menon"),
-    "Siemens Healthineers": ("SIEM", "care.in@siemens-healthineers.com", "Vikram Rao"),
-    "Draeger India": ("DRAE", "info.india@draeger.com", "Suresh Nair"),
-    "Mindray Medical India": ("MIND", "service@mindray.in", "Priya Sharma"),
-    "Medingenious Solutions": ("MEDG", "sales@medingenious.in", "Karthik S"),
-    "Trivitron Healthcare": ("TRIV", "enquiry@trivitron.com", "Deepa R"),
-}
-BRAND_TO_VENDOR = {"Philips": "Philips India", "GE Healthcare": "GE Healthcare", "Siemens": "Siemens Healthineers",
-                   "Draeger": "Draeger India", "Mindray": "Mindray Medical India", "Hamilton": "Trivitron Healthcare",
-                   "B Braun": "Trivitron Healthcare", "Baxter": "Medingenious Solutions", "Nipro": "Medingenious Solutions",
-                   "Fresenius": "Trivitron Healthcare", "ZOLL": "Medingenious Solutions", "Nihon Kohden": "Trivitron Healthcare"}
-PAYMENT_TERMS = ["100% against delivery", "50% advance, 50% against delivery", "30% advance, 70% on installation",
-                 "Net 30 days", "Net 45 days", "100% advance"]
-
-# ---- PO-level arrays ----
-def rand_date(year):
-    start = datetime(year, 1, 1)
-    return start + timedelta(days=int(np.random.randint(0, 360)))
-
-_year_w = np.array([1, 1, 1.2, 1.3, 1.5, 1.6, 1.8, 2.0, 2.3, 2.5, 2.7])
-po_years = np.random.choice(range(2015, 2026), size=N_POS, p=_year_w / _year_w.sum())
-line_counts = np.random.choice([1, 2, 3], size=N_POS, p=[.62, .28, .10])
-po_units = np.random.choice(UNITS, size=N_POS)
-po_dates = [rand_date(y) for y in po_years]
-po_numbers = [f"PO-{y}-{i:05d}" for i, y in enumerate(po_years)]
-
-rows = []
-for i in range(N_POS):
-    y = int(po_years[i]); pod = po_dates[i]; unit = po_units[i]; pon = po_numbers[i]
-    inflation = 1.03 ** (y - 2015)
-    payment = np.random.choice(PAYMENT_TERMS, p=[.28, .22, .18, .12, .10, .10])
-    header_disc = round(float(np.random.choice([0, 0, 2, 3, 5], p=[.5, .2, .12, .1, .08])), 2)
-    for ln in range(int(line_counts[i])):
-        cat = np.random.choice(list(CAT_WEIGHTS), p=list(CAT_WEIGHTS.values()))
-        spec = CATALOG_SPEC[cat]
-        brand = np.random.choice(list(spec["brands"]))
-        model = np.random.choice(spec["brands"][brand])
-        vendor = BRAND_TO_VENDOR.get(brand, "Medingenious Solutions")
-        vcode, vemail, vcontact = VENDOR_SPEC[vendor]
-        brand_premium = 1.05 if brand in ("Philips", "GE Healthcare", "Siemens") else 0.97
-        unit_rate = float(spec["base"] * inflation * brand_premium * np.random.lognormal(0, spec["sigma"]))
-        unit_rate = round(unit_rate, 2)
-        qty = int(np.random.randint(spec["qty"][0], spec["qty"][1] + 1))
-        disc = round(float(np.random.choice([0, 2, 5, 7, 10, 12], p=[.30, .18, .2, .12, .12, .08])), 2)
-        warranty = int(np.random.choice([12, 24, 24, 36, 60], p=[.10, .40, .25, .18, .07]))
-        has_amc = np.random.rand() < (0.85 if spec["base"] > 5e6 else 0.65)
-        has_camc = has_amc and np.random.rand() < 0.4
-        has_foc = np.random.rand() < 0.55
-        lead = int(np.random.randint(30, 150))
-        tax_pct = float(np.random.choice([5, 12, 18], p=[.2, .5, .3]))
-        line_total = round(qty * unit_rate * (1 - disc / 100.0), 2)
-        line_tax = round(line_total * tax_pct / 100.0, 2)
-        rows.append({
-            "source_system": np.random.choice(["OLD_SAP", "ORACLE"]),
-            "source_file_name": f"{pon}_{ln+1}.pdf",
-            "extracted_at": _NOW,
-            "unit_name": unit,
-            "buyer_legal_entity": "Kauvery Hospitals Pvt Ltd",
-            "buyer_address": "No.199, Luz Church Road, Mylapore, Chennai 600004",
-            "buyer_gstin": "33AABCK1234M1Z5", "buyer_pan": "AABCK1234M", "buyer_phone": "044-40006000",
-            "po_number": pon, "po_date": pod.strftime("%d/%m/%y"),
-            "pr_number": f"PR-{y}-{i:05d}", "revision_no": int(np.random.choice([0, 0, 1], p=[.8, .15, .05])),
-            "currency": None if np.random.rand() < 0.9 else "INR",
-            "delivery_date": (pod + timedelta(days=lead)).strftime("%d/%m/%y"),
-            "quote_ref": f"QT-{vcode}-{y}-{np.random.randint(1000,9999)}", "quote_date": (pod - timedelta(days=int(np.random.randint(5,40)))).strftime("%d/%m/%y"),
-            "agreement_no_date": None,
-            "vendor_code": vcode, "vendor_name": vendor, "vendor_address": f"{vendor}, India",
-            "vendor_gstin": f"33{vcode}5678Q1Z9", "vendor_email": vemail, "vendor_contact_person": vcontact,
-            "vendor_contact_no": f"9{np.random.randint(100000000,999999999)}",
-            "bill_to": unit, "ship_to": unit, "department": "Biomedical Engineering",
-            "remarks": None,
-            "special_instructions": ("Includes application training for 3 days. " if np.random.rand() < 0.5 else "")
-                                    + ("Installation & commissioning by OEM. " if np.random.rand() < 0.6 else ""),
-            "header_discount_pct": header_disc,
-            "other_charges": round(float(np.random.choice([0, 5000, 15000], p=[.7, .2, .1])), 2),
-            "amount_in_words": None, "payment_terms": payment,
-            "warranty_months": warranty, "warranty_raw": f"{warranty} months comprehensive",
-            "amc_value": (f"{np.random.choice([5,7,8,10])}% of value per annum for 5 years" if has_amc else None),
-            "camc_value": (f"{np.random.choice([8,10,12])}% of value per annum" if has_camc else None),
-            "foc_details": (str(np.random.choice(FOC_BY_CAT.get(cat, ["Starter consumables + accessories kit"]))) if has_foc else None),
-            "foc_value": (round(float(unit_rate * np.random.uniform(0.01, 0.04)), 2) if has_foc else None),
-            "camc_amc_start_date": ((pod + timedelta(days=warranty*30)).strftime("%d/%m/%y") if has_amc else None),
-            "camc_amc_end_date": ((pod + timedelta(days=warranty*30 + 1825)).strftime("%d/%m/%y") if has_amc else None),
-            "yoy_escalation": ("5% per annum" if has_amc else None),
-            "inco_terms": np.random.choice(["DDP", "CIP", "FOR Destination"]),
-            "freight": np.random.choice(["Included", "Extra at actuals", "Paid"]),
-            "delivery_contact": vcontact, "advance_performa": None, "advance_before_delivery": None,
-            "payment_against_delivery": None, "buyback_offer": (None if np.random.rand() < 0.85 else "Trade-in on old unit"),
-            "line_no": ln + 1, "item_code": f"{cat[:3].upper()}-{np.random.randint(1000,9999)}",
-            "item_description": f"{brand} {model} {cat}", "qty": float(qty), "uom": "NOS",
-            "discount_pct": disc, "tax_pct": tax_pct,
-            "tax_code": f"EXGST{int(tax_pct)}",
-            "unit_rate": unit_rate, "line_total": line_total, "line_tax_amount": line_tax,
-            "line_net_total": round(line_total + line_tax, 2),
-            "make_brand": brand, "model_no": model,
-            # helper columns (not part of the customer schema) used to derive header aggregates:
-            "_category": cat,
-        })
-
-hist_pdf = pd.DataFrame(rows)
-
-# header-level aggregates from line totals
-agg = hist_pdf.groupby("po_number").agg(sub_total=("line_total", "sum"), tax_total=("line_tax_amount", "sum")).reset_index()
-hist_pdf = hist_pdf.merge(agg, on="po_number", how="left")
-hist_pdf["igst_amount"] = hist_pdf["tax_total"]  # inter-state default
-hist_pdf["cgst_amount"] = 0.0
-hist_pdf["sgst_amount"] = 0.0
-hist_pdf["order_total"] = (hist_pdf["sub_total"] - hist_pdf["sub_total"] * hist_pdf["header_discount_pct"] / 100.0
-                           + hist_pdf["tax_total"] + hist_pdf["other_charges"]).round(2)
-print(f"Generated {len(hist_pdf):,} PO line items across {hist_pdf['po_number'].nunique():,} POs, {hist_pdf['_category'].nunique()} categories")
-
-# COMMAND ----------
-
-# Write to Delta with the exact customer column order/types.
-from pyspark.sql.types import (StructType, StructField, StringType, DoubleType, IntegerType, TimestampType)
-
-STRING_COLS = ["source_system","source_file_name","unit_name","buyer_legal_entity","buyer_address","buyer_gstin",
-    "buyer_pan","buyer_phone","po_number","po_date","pr_number","currency","delivery_date","quote_ref","quote_date",
-    "agreement_no_date","vendor_code","vendor_name","vendor_address","vendor_gstin","vendor_email","vendor_contact_person",
-    "vendor_contact_no","bill_to","ship_to","department","remarks","special_instructions","amount_in_words","payment_terms",
-    "warranty_raw","amc_value","camc_value","foc_details","camc_amc_start_date","camc_amc_end_date","yoy_escalation",
-    "inco_terms","freight","delivery_contact","advance_performa","advance_before_delivery","payment_against_delivery",
-    "buyback_offer","item_code","item_description","uom","tax_code","make_brand","model_no"]
-DOUBLE_COLS = ["sub_total","tax_total","igst_amount","cgst_amount","sgst_amount","other_charges","header_discount_pct",
-    "order_total","qty","discount_pct","tax_pct","unit_rate","line_total","line_tax_amount","line_net_total","foc_value"]
-INT_COLS = ["revision_no","warranty_months","line_no"]
-
-SCHEMA_ORDER = ["source_system","source_file_name","extracted_at","unit_name","buyer_legal_entity","buyer_address",
-    "buyer_gstin","buyer_pan","buyer_phone","po_number","po_date","pr_number","revision_no","currency","delivery_date",
-    "quote_ref","quote_date","agreement_no_date","vendor_code","vendor_name","vendor_address","vendor_gstin","vendor_email",
-    "vendor_contact_person","vendor_contact_no","bill_to","ship_to","department","remarks","special_instructions",
-    "sub_total","tax_total","igst_amount","cgst_amount","sgst_amount","other_charges","header_discount_pct","order_total",
-    "amount_in_words","payment_terms","warranty_months","warranty_raw","amc_value","camc_value","foc_details","foc_value",
-    "camc_amc_start_date","camc_amc_end_date","yoy_escalation","inco_terms","freight","delivery_contact","advance_performa",
-    "advance_before_delivery","payment_against_delivery","buyback_offer","line_no","item_code","item_description","qty",
-    "uom","discount_pct","tax_pct","tax_code","unit_rate","line_total","line_tax_amount","line_net_total","make_brand","model_no"]
-
-def _spark_type(col):
-    if col == "extracted_at": return TimestampType()
-    if col in INT_COLS: return IntegerType()
-    if col in DOUBLE_COLS: return DoubleType()
-    return StringType()
-
-schema = StructType([StructField(c, _spark_type(c), True) for c in SCHEMA_ORDER])
-
-out = hist_pdf.copy()
-for c in INT_COLS:
-    out[c] = out[c].astype(int)
-
-# Build native Python rows (no Arrow type-inference surprises on serverless / Spark Connect).
-def _native(v):
-    if v is None:
-        return None
-    if isinstance(v, float) and np.isnan(v):
-        return None
-    if isinstance(v, np.integer):
-        return int(v)
-    if isinstance(v, np.floating):
-        return None if np.isnan(v) else float(v)
-    return v
-
-data = [tuple(_native(rec[c]) for c in SCHEMA_ORDER)
-        for rec in out[SCHEMA_ORDER].to_dict("records")]
-hist_sdf = spark.createDataFrame(data, schema=schema)
-hist_sdf.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(HIST_TABLE)
-spark.sql(f"COMMENT ON TABLE {HIST_TABLE} IS 'Kauvery CAPEX Phase-1 foundation: finalized historical PO line items (synthetic demo data).'")
-print(f"Wrote {HIST_TABLE}")
-display(spark.sql(f"SELECT unit_name, vendor_name, po_date, item_description, model_no, qty, unit_rate, warranty_months, amc_value FROM {HIST_TABLE} LIMIT 8"))
+hist_pdf = spark.table(HIST_TABLE).toPandas()   # your real, tabular history — no PDF parsing
+hist_pdf["_category"] = "General"                # single universal benchmark (categories removed)
+hist_pdf["po_date"] = pd.to_datetime(hist_pdf["po_date"], errors="coerce").dt.strftime("%d/%m/%y")
+missing = [c for c in ["unit_rate","po_date","model_no","make_brand","po_number","unit_name",
+                       "warranty_months","amc_value","camc_value","foc_details",
+                       "special_instructions","source_file_name"] if c not in hist_pdf.columns]
+assert not missing, f"{HIST_TABLE} is missing columns the benchmark needs: {missing}"
+print(f"Loaded {len(hist_pdf):,} rows from {HIST_TABLE}.")
 
 # COMMAND ----------
 
