@@ -36,7 +36,7 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install --quiet fpdf2 joblib
+# MAGIC %pip install --quiet fpdf2 joblib mlflow scikit-learn
 # MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
