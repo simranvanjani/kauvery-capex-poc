@@ -236,19 +236,25 @@ except Exception as e:
 
 # COMMAND ----------
 
+# List via the REST API (works on any SDK version; w.postgres may be absent on older SDKs).
 try:
-    projects = [p.project_id for p in w.postgres.list_projects()]
+    _projects = w.api_client.do("GET", "/api/2.0/postgres/projects").get("projects") or []
 except Exception as e:
-    projects = []
+    _projects = []
     print(f"[note] couldn't list Lakebase projects: {_brief(e)}")
 
-if LAKEBASE_PROJECT in projects:
+# Match on project_id OR display_name (forgiving if §1 holds the display name), then normalise
+# LAKEBASE_PROJECT to the real project_id — §7's Lakebase resource path needs the id, not the name.
+_match = next((p for p in _projects
+               if LAKEBASE_PROJECT in (p.get("project_id"), p.get("status", {}).get("display_name"))), None)
+if _match:
+    LAKEBASE_PROJECT = _match["project_id"]
     print(f"Lakebase project '{LAKEBASE_PROJECT}' ready (reusing existing).")
 else:
     print(f"[create once] Lakebase project '{LAKEBASE_PROJECT}' not found — create it, then re-run this cell:")
-    print(f"  databricks postgres create-project {LAKEBASE_PROJECT} "
-          f"--json '{{\"spec\": {{\"display_name\": \"CAPEX conversation history + feedback\"}}}}'")
-    print("  (or Compute → Lakebase → New project). LAKEBASE_PROJECT in §1 must be the project_id, not the display name.")
+    print("  databricks postgres create-project <project_id> "
+          "--json '{\"spec\": {\"display_name\": \"CAPEX conversation history + feedback\"}}'")
+    print("  (or Compute → Lakebase → New project). Set LAKEBASE_PROJECT in §1 to the project_id (lowercase-hyphens), not the display name.")
 
 # COMMAND ----------
 
