@@ -498,7 +498,10 @@
         out.push('<ul style="margin:6px 0;padding-left:18px">'+items.join('')+'</ul>'); continue;
       }
       if(ln.trim()===''){ i++; continue; }
-      let para=[]; while(i<lines.length && lines[i].trim()!=='' && !/^\s*[-*#|]/.test(lines[i])){ para.push(lines[i]); i++; }
+      // paragraph: ALWAYS consume the current line first (guarantees forward progress even for a
+      // stray line starting with * - # | that matched no block rule above — otherwise infinite loop)
+      let para=[ln]; i++;
+      while(i<lines.length && lines[i].trim()!=='' && !/^\s*[-*#|]/.test(lines[i])){ para.push(lines[i]); i++; }
       out.push('<p style="margin:8px 0">'+inline(para.join(' '))+'</p>');
     }
     return out.join('');
