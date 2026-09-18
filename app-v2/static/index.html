@@ -226,17 +226,8 @@
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
       New review
     </button>
-    <div class="nav-label">Today</div>
-    <nav class="histlist">
-      <a href="#" class="active">vTitan Syringe Pump — review</a>
-      <a href="#">CT Scanner cross-site prices</a>
-      <a href="#">Best vendor for ventilators</a>
-    </nav>
-    <div class="nav-label">Yesterday</div>
-    <nav class="histlist">
-      <a href="#">Philips IntelliVue MX450 quote</a>
-      <a href="#">Dialysis machine — AMC gaps</a>
-    </nav>
+    <div class="nav-label">Recent</div>
+    <nav class="histlist" id="histList"></nav>
     <div class="side-foot">
       <div class="avatar">UA</div>
       <div><div class="who">Udhayakumar A</div><div class="role">Capex team</div></div>
@@ -540,6 +531,7 @@
       const txt = j.text || j.error || '(no response)';
       convo.push({role:'assistant', content:txt});
       body.innerHTML = md(txt);
+      tagTurn(body, j); loadHistory();
     }catch(e){ body.innerHTML='<p style="color:var(--reject)">Error: '+esc(String(e))+'</p>'; }
     scroll();
   }
@@ -572,7 +564,7 @@
       const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({session_id:SESSION_ID, messages:convo})});
       const j=await r.json(); const txt=j.text||j.error||'(no response)';
-      convo.push({role:'assistant', content:txt}); body.innerHTML=md(txt);
+      convo.push({role:'assistant', content:txt}); body.innerHTML=md(txt); tagTurn(body, j); loadHistory();
     }catch(e){ body.innerHTML='<p style="color:var(--reject)">Error: '+esc(String(e))+'</p>'; }
     fileInput.value=''; scroll();
   });
@@ -580,6 +572,44 @@
   // new review resets the thread
   const newBtn=document.querySelector('.newbtn');
   if(newBtn) newBtn.addEventListener('click',()=>{ convo.length=0; mockCleared=false; location.reload(); });
+
+  // ---- history + feedback (Lakebase-backed) ----
+  function tagTurn(body, j){
+    const turn = body && body.closest ? body.closest('.turn') : null;
+    if(turn){ turn.dataset.mid = (j && j.message_id!=null) ? j.message_id : ''; turn.dataset.sid = (j && j.session_id) || SESSION_ID; }
+  }
+  window.fb = function(btn, kind){
+    const actions = btn.closest('.msg-actions');
+    if(actions){ actions.querySelectorAll('.iconbtn.up,.iconbtn.down').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel');
+      const lbl = actions.querySelector('.fb-label'); if(lbl) lbl.textContent = kind==='up' ? 'Logged as helpful' : 'Thanks — feedback sent'; }
+    const turn = btn.closest('.turn');
+    const mid = turn && turn.dataset.mid ? Number(turn.dataset.mid) : null;
+    fetch('/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({session_id:(turn&&turn.dataset.sid)||SESSION_ID, message_id:mid, rating:kind})}).catch(()=>{});
+  };
+  const histList = document.getElementById('histList');
+  function loadHistory(){
+    if(!histList) return;
+    fetch('/api/history').then(r=>r.json()).then(d=>{
+      const s = (d && d.sessions) || [];
+      histList.innerHTML = s.length
+        ? s.map(x=>'<a href="#" data-sid="'+esc(x.session_id)+'">'+esc(x.title||'Review')+'</a>').join('')
+        : '<a href="#" style="color:var(--muted);pointer-events:none">No reviews yet</a>';
+      histList.querySelectorAll('a[data-sid]').forEach(a=>a.addEventListener('click', e=>{ e.preventDefault(); loadSession(a.dataset.sid, a); }));
+    }).catch(()=>{});
+  }
+  function loadSession(sid, a){
+    fetch('/api/session/'+encodeURIComponent(sid)).then(r=>r.json()).then(d=>{
+      const msgs = (d && d.messages) || []; if(!msgs.length) return;
+      clearMock(); thread.innerHTML=''; mockCleared=true; convo.length=0;
+      if(histList){ histList.querySelectorAll('a').forEach(x=>x.classList.remove('active')); if(a) a.classList.add('active'); }
+      msgs.forEach(m=>{ convo.push({role:m.role, content:m.content});
+        if(m.role==='user'){ addUser(m.content); }
+        else { const b=addBot(md(m.content)); const t=b.closest('.turn'); if(t){ t.dataset.mid=m.id; t.dataset.sid=sid; } } });
+      scroll();
+    }).catch(()=>{});
+  }
+  loadHistory();
 
   // identity
   fetch('/api/me').then(r=>r.json()).then(me=>{

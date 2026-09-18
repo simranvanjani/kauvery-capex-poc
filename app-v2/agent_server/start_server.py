@@ -39,6 +39,21 @@ _STATIC = Path(__file__).parents[1] / "static"
 CATALOG = os.getenv("CATALOG", "kauvey_poc")
 SCHEMA = os.getenv("SCHEMA", "gold")
 
+# Conversation history + feedback persistence on the capex-v2 Lakebase. Best-effort: if the DB is
+# unreachable, chat/review still work and only history + feedback degrade.
+from agent_server import store  # noqa: E402
+
+try:
+    store.init_schema()
+except Exception as _e:  # noqa: BLE001
+    import logging
+    logging.getLogger(__name__).warning("Lakebase init_schema failed (history/feedback off): %s", _e)
+
+
+def _user_email(request: Request) -> str:
+    h = request.headers
+    return h.get("x-forwarded-email") or h.get("x-forwarded-preferred-username") or "local@dev"
+
 _wc = None
 
 
@@ -77,6 +92,9 @@ async def _chat(request: Request):
     messages = payload.get("messages") or []
     if not messages and payload.get("message"):
         messages = [{"role": "user", "content": payload["message"]}]
+    session_id = payload.get("session_id") or uuid.uuid4().hex
+    email = _user_email(request)
+    user_text = next((m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), "")
     msgs = normalize_history_items(messages)
     try:
         result = await Runner.run(create_agent(), msgs)
@@ -84,9 +102,17 @@ async def _chat(request: Request):
         if not isinstance(text, str):
             text = str(text)
         text = _clean_output(text)
-        return {"text": text}
     except Exception as e:  # noqa: BLE001
         return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=200)
+    message_id = None
+    try:  # best-effort persistence — never fail the chat on a DB hiccup
+        store.create_session(session_id, email, title=(user_text or "New review")[:60])
+        store.add_message(session_id, "user", user_text)
+        message_id = store.add_message(session_id, "assistant", text)
+    except Exception as pe:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning("history persist failed: %s", pe)
+    return {"text": text, "message_id": message_id, "session_id": session_id}
 
 
 @app.post("/api/upload")
@@ -118,14 +144,35 @@ def _me(request: Request):
     return {"email": email, "name": disp, "initials": initials}
 
 
-# Phase-1 stubs (wired to Lakebase in the next phase)
 @app.get("/api/history")
-def _history():
-    return []
+def _history(request: Request):
+    try:
+        return {"sessions": store.list_sessions(_user_email(request))}
+    except Exception:  # noqa: BLE001
+        return {"sessions": []}
+
+
+@app.get("/api/session/{session_id}")
+def _session(session_id: str):
+    try:
+        return {"messages": store.get_session_messages(session_id)}
+    except Exception:  # noqa: BLE001
+        return {"messages": []}
 
 
 @app.post("/api/feedback")
 async def _feedback(request: Request):
+    body = await request.json()
+    try:
+        store.add_feedback(
+            message_id=body.get("message_id"),
+            session_id=body.get("session_id"),
+            user_email=_user_email(request),
+            rating=body.get("rating"),
+            comment=body.get("comment"),
+        )
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"ok": False}, status_code=200)
     return {"ok": True}
 
 

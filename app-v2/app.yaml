@@ -23,3 +23,7 @@ env:
   # PDF extraction ai_query needs json_object responseFormat (unsupported by Claude) -> keep Llama.
   - name: EXTRACT_MODEL
     value: "databricks-llama-4-maverick"
+  # Lakebase schema the app SP creates & OWNS on startup. Fresh name avoids the user-owned 'capex'
+  # test schema (SP has CAN_CONNECT_AND_CREATE; it can only use schemas it created).
+  - name: LAKEBASE_SCHEMA
+    value: "capex_app"
