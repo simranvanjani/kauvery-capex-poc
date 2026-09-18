@@ -831,10 +831,9 @@ display(spark.table(COMPARISON_TABLE))
 
 # Gap-detection recall on a synthetic labeled set with known omissions.
 gap_eval, expected = [], []
-categories = list(reference_bom.keys())[1:]
+# Category removed: evaluate gap detection against the single universal Reference BOM.
+cat, bom = "General", reference_bom["_default"]
 for i in range(200):
-    cat = np.random.choice(categories)
-    bom = reference_bom[cat]
     drop_amc = np.random.rand() < 0.5
     drop_foc = ("foc_accessories" in bom["requires"]) and np.random.rand() < 0.5
     short_warr = np.random.rand() < 0.4
