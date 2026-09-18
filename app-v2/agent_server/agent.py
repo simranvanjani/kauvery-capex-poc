@@ -65,7 +65,10 @@ def _run_sql(statement: str) -> list:
 
 def _uc_fn(fn: str, search: str):
     safe = (search or "").replace("'", "")
-    rows = _run_sql(f"SELECT {CATALOG}.{SCHEMA}.{fn}('{safe}') AS r")
+    try:
+        rows = _run_sql(f"SELECT {CATALOG}.{SCHEMA}.{fn}('{safe}') AS r")
+    except Exception as e:  # DB / warehouse unreachable or query failed — surface it, don't hide
+        return {"error": f"could not reach the history database ({CATALOG}.{SCHEMA}): {e}"}
     try:
         return json.loads(rows[0][0]) if rows and rows[0] and rows[0][0] else []
     except Exception:  # noqa: BLE001
@@ -130,7 +133,10 @@ def score_line_item(
         "delivery_lead_days": int(delivery_lead_days), "payment_terms": payment_terms,
         "has_training": bool(has_training), "has_installation": bool(has_installation),
     }
-    resp = wc().serving_endpoints.query(name=MODEL_ENDPOINT, dataframe_records=[rec])
+    try:
+        resp = wc().serving_endpoints.query(name=MODEL_ENDPOINT, dataframe_records=[rec])
+    except Exception as e:  # scoring endpoint unreachable — surface it, don't fabricate a score
+        return json.dumps({"error": f"could not reach the scoring model '{MODEL_ENDPOINT}': {e}"})
     return json.dumps(resp.predictions[0] if resp.predictions else {})
 
 
@@ -151,23 +157,26 @@ def recommend_vendor(search: str) -> str:
 CAPEX_INSTRUCTIONS = (
     "You are the Kauvery Hospital CAPEX Procurement Intelligence assistant. You review vendor "
     "quotations against Kauvery's own purchase history and help the capex team negotiate better deals.\n\n"
-    "AUTO-REVIEW — IMPORTANT: as soon as the user provides a quotation, whether as an uploaded PDF "
-    "(you will be given its UC Volume path) or as typed line-item details, IMMEDIATELY review it. Do "
-    "NOT ask clarifying questions first — just run the review.\n\n"
+    "AUTO-REVIEW — IMPORTANT: as soon as the user provides a quotation — whether an uploaded PDF (you will "
+    "be given its UC Volume path) OR typed / pasted line items OR free text describing the quote — "
+    "IMMEDIATELY review it. Do NOT ask clarifying questions first; extract what you can and run the review.\n\n"
     "Workflow per quotation:\n"
-    "1. If given a PDF volume path, call parse_quotation_pdf to extract line items (works for ANY vendor "
-    "PDF format).\n"
+    "1. If given a PDF volume path, call parse_quotation_pdf to extract line items (any vendor format).\n"
     "2. For EACH line item, call score_line_item, then cross_unit_history, then recommend_vendor.\n"
-    "3. Present, per line item:\n"
-    "   - Item -> quoted price.\n"
-    "   - Gaps found (missing inclusions), each with its citation.\n"
-    "   - Price fairness: the verdict and % vs the most-recent comparable purchase. Never say a vendor "
-    "is 'overcharging' — say 'X% above/below the most-recent comparable purchase'.\n"
-    "   - A cross-site history table (markdown): unit, vendor, date, unit price, warranty, maintenance, "
-    "free-of-cost — cheapest first.\n"
-    "   - The recommended vendor (prefer bundled FOC + AMC at a low price).\n"
-    "   - An overall, actionable negotiation recommendation.\n\n"
-    "Ground every claim in tool output; never invent prices, vendors, dates, or specs."
+    "3. Present, per line item: item -> quoted price; gaps found (each with its citation); price fairness "
+    "(verdict + % vs the most-recent comparable purchase — say 'X% above/below the most-recent comparable "
+    "purchase', never 'overcharging'); a markdown cross-site history table (unit, vendor, date, unit price, "
+    "warranty, maintenance, FOC, cheapest first); the recommended vendor; and an actionable negotiation ask.\n\n"
+    "NEW ITEM (no Kauvery history): if score_line_item returns match_level 'No historical purchase found' "
+    "or cross_unit_history returns an empty list, clearly flag the item as **NEW to Kauvery — no purchase "
+    "history**, and give an INDICATIVE market-price estimate from general market knowledge, explicitly "
+    "labelled 'indicative market estimate — not Kauvery data'. Never present that estimate as a Kauvery benchmark.\n\n"
+    "DATA ERRORS: if a tool returns an object with an \"error\" key (e.g. the history database or scoring "
+    "model is unreachable), STOP and tell the user plainly that the historical benchmark / score could NOT "
+    "be retrieved because of that error, and show the error message. Do NOT fabricate history or a benchmark, "
+    "and do NOT silently skip it or treat it as 'no history'.\n\n"
+    "Ground every Kauvery claim in tool output; never invent Kauvery prices, vendors, dates, or specs. The "
+    "only allowed non-grounded figure is a clearly-labelled market estimate for a genuinely new item."
 )
 
 
