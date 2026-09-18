@@ -238,10 +238,6 @@
     <div class="topbar">
       <h1 id="viewTitle">CAPEX Copilot</h1>
       <span class="ctx" id="viewCtx">Quotation review</span>
-      <div class="seg" role="tablist" aria-label="View">
-        <button id="tabChat" class="on" role="tab" aria-selected="true" onclick="setView('chat')">Assistant</button>
-        <button id="tabMon" role="tab" aria-selected="false" onclick="setView('mon')">Monitor <span class="adminflag">Admin</span></button>
-      </div>
     </div>
 
     <!-- CHAT -->
@@ -268,73 +264,10 @@
       </div>
     </section>
 
-    <!-- MONITOR -->
-    <section class="view" id="monView" hidden>
-      <div class="monitor">
-        <div class="mon-head">
-          <div>
-            <h2>Usage &amp; feedback</h2>
-            <p>Every review across the capex team, with the feedback people left. Admins only.</p>
-          </div>
-          <div class="range" role="group" aria-label="Range"><button>24h</button><button class="on">7 days</button><button>30 days</button></div>
-        </div>
-
-        <div class="tiles">
-          <div class="tile"><div class="k">Reviews run</div><div class="v">128</div><div class="d pos">▲ 22% vs prior 7d</div></div>
-          <div class="tile"><div class="k">Helpful rate</div><div class="v">86%</div><div class="d">74 👍 · 12 👎</div></div>
-          <div class="tile"><div class="k">Active users</div><div class="v">9</div><div class="d">of 11 on the team</div></div>
-          <div class="tile"><div class="k">Avg worth-score</div><div class="v">61</div><div class="d neg">▼ 4 · weaker quotes</div></div>
-        </div>
-
-        <div class="split">
-          <div class="block">
-            <h3>Feedback</h3>
-            <div class="barlabel"><span>Helpful vs not</span><span class="muted">74 · 12</span></div>
-            <div class="bar"><span style="width:86%;background:var(--up)"></span><span style="width:14%;background:var(--down)"></span></div>
-            <div class="legend"><span><i style="background:var(--up)"></i>Helpful</span><span><i style="background:var(--down)"></i>Not helpful</span></div>
-          </div>
-          <div class="block">
-            <h3>Verdict mix</h3>
-            <div class="barlabel"><span>128 line items</span><span class="muted">33 · 71 · 24</span></div>
-            <div class="bar"><span style="width:26%;background:var(--accept)"></span><span style="width:55%;background:var(--negotiate)"></span><span style="width:19%;background:var(--reject)"></span></div>
-            <div class="legend"><span><i style="background:var(--accept)"></i>Accept</span><span><i style="background:var(--negotiate)"></i>Negotiate</span><span><i style="background:var(--reject)"></i>Reject</span></div>
-          </div>
-        </div>
-
-        <div class="block">
-          <div class="block-title"><h3>All reviews</h3><span class="meta">newest first</span></div>
-          <div class="tablewrap">
-            <table class="montable" style="min-width:600px">
-              <thead><tr><th>When</th><th>User</th><th>Item</th><th>Verdict</th><th>Feedback</th></tr></thead>
-              <tbody>
-                <tr><td class="u">10:42</td><td>Udhayakumar A</td><td><span class="q">vTitan Syringe Pump</span><br><span class="u">₹4.15L · Medingenious</span></td><td><span class="vpill negotiate">Negotiate</span></td><td><span class="fb up">👍 Helpful</span></td></tr>
-                <tr><td class="u">10:31</td><td>Prasanthkumar A</td><td><span class="q">CT Scanner — cross-site</span><br><span class="u">GE Revolution 128</span></td><td><span class="vpill accept">Accept</span></td><td><span class="fb up">👍 Helpful</span></td></tr>
-                <tr><td class="u">09:58</td><td>Aravind Ganesan</td><td><span class="q">Ventilator — Draeger V600</span><br><span class="u">₹9.8L · 100% advance</span></td><td><span class="vpill reject">Reject</span></td><td><span class="fb down">👎 “missed the AMC line”</span></td></tr>
-                <tr><td class="u">09:20</td><td>Udhayakumar A</td><td><span class="q">Patient monitors — best vendor</span><br><span class="u">Philips vs Mindray</span></td><td><span class="vpill accept">Accept</span></td><td><span class="fb none">not rated</span></td></tr>
-                <tr><td class="u">Yst</td><td>Aparna Bansal</td><td><span class="q">Dialysis — AMC gaps</span><br><span class="u">Fresenius 4008S</span></td><td><span class="vpill negotiate">Negotiate</span></td><td><span class="fb up">👍 Helpful</span></td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <div class="ribbon" id="ribbon">Monitor uses sample data · live chat &amp; PDF review are connected</div>
   </div>
 </div>
 
 <script>
-  function setView(v){
-    const chat = v === 'chat';
-    document.getElementById('chatView').hidden = !chat;
-    document.getElementById('monView').hidden = chat;
-    document.getElementById('tabChat').classList.toggle('on', chat);
-    document.getElementById('tabMon').classList.toggle('on', !chat);
-    document.getElementById('tabChat').setAttribute('aria-selected', chat);
-    document.getElementById('tabMon').setAttribute('aria-selected', !chat);
-    document.getElementById('viewTitle').textContent = chat ? 'CAPEX Copilot' : 'Monitor';
-    document.getElementById('viewCtx').textContent = chat ? 'Quotation review' : 'Admin · usage & feedback';
-  }
   function fb(btn, kind){
     const row = btn.parentElement;
     row.querySelectorAll('.iconbtn.up, .iconbtn.down').forEach(b => b.classList.remove('sel'));
