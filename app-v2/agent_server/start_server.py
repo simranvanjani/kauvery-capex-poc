@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -9,10 +10,127 @@ load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env", override=True)
 # Need to import the agent to register the functions with the server
 import agent_server.agent  # noqa: E402
 
-agent_server = AgentServer("ResponsesAgent", enable_chat_proxy=True)
+agent_server = AgentServer("ResponsesAgent", enable_chat_proxy=False)
 # Define the app as a module level variable to enable multiple workers
 app = agent_server.app  # noqa: F841
-setup_mlflow_git_based_version_tracking()
+
+# Git-based version tracking is a local dev/eval feature: it reads the repo's .git to tag traces
+# with the current commit. The deployed app container has no .git (DABs uploads source, not git
+# metadata), so this only runs locally when both a repo and an experiment are present. Running it
+# unconditionally crashed the app at startup on deploy.
+if Path(__file__).parents[1].joinpath(".git").exists() and os.getenv("MLFLOW_EXPERIMENT_ID"):
+    setup_mlflow_git_based_version_tracking()
+
+
+# ============ Custom CAPEX Copilot frontend + API ============
+import io  # noqa: E402
+import re  # noqa: E402
+import uuid  # noqa: E402
+
+from agents import Runner  # noqa: E402
+from fastapi import Request  # noqa: E402
+from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+
+from agent_server.agent import create_agent  # noqa: E402
+from agent_server.history import normalize_history_items  # noqa: E402
+
+_STATIC = Path(__file__).parents[1] / "static"
+CATALOG = os.getenv("CATALOG", "kauvey_poc")
+SCHEMA = os.getenv("SCHEMA", "gold")
+
+_wc = None
+
+
+def _w():
+    global _wc
+    if _wc is None:
+        from databricks.sdk import WorkspaceClient
+        _wc = WorkspaceClient()
+    return _wc
+
+
+@app.get("/")
+def _index():
+    return FileResponse(_STATIC / "index.html")
+
+
+def _clean_output(text: str) -> str:
+    """Guard: strip any leaked tool-call syntax (e.g. Llama's `<|python_tag|>[tool(...)]ipython`)
+    so raw function-call text never reaches the UI. With a tool-calling model (Claude) this is a
+    no-op; it only fires if a model role-plays the tool in plain text."""
+    text = text.replace("<|python_tag|>", "")
+    kept = []
+    for ln in text.splitlines():
+        s = ln.strip()
+        if s == "ipython":
+            continue
+        if re.match(r"^\[[A-Za-z_][A-Za-z0-9_]*\(.*\)\]$", s):
+            continue
+        kept.append(ln)
+    return "\n".join(kept).strip()
+
+
+@app.post("/api/chat")
+async def _chat(request: Request):
+    payload = await request.json()
+    messages = payload.get("messages") or []
+    if not messages and payload.get("message"):
+        messages = [{"role": "user", "content": payload["message"]}]
+    msgs = normalize_history_items(messages)
+    try:
+        result = await Runner.run(create_agent(), msgs)
+        text = result.final_output
+        if not isinstance(text, str):
+            text = str(text)
+        text = _clean_output(text)
+        return {"text": text}
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=200)
+
+
+@app.post("/api/upload")
+async def _upload(request: Request):
+    data = await request.body()
+    fname = request.headers.get("x-filename", "quotation.pdf")
+    ext = ("." + fname.rsplit(".", 1)[-1]) if "." in fname else ".pdf"
+    path = f"/Volumes/{CATALOG}/{SCHEMA}/landing/{uuid.uuid4().hex}{ext}"
+    try:
+        _w().files.upload(path, io.BytesIO(data), overwrite=True)
+        return {"volume_path": path}
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=200)
+
+
+@app.get("/api/me")
+def _me(request: Request):
+    h = request.headers
+    email = h.get("x-forwarded-email") or h.get("x-forwarded-preferred-username") or ""
+    name = h.get("x-forwarded-preferred-username") or email
+    if not email:
+        try:
+            email = _w().current_user.me().user_name or ""
+            name = email
+        except Exception:  # noqa: BLE001
+            pass
+    disp = (name or email or "User").split("@")[0].replace(".", " ").title()
+    initials = "".join(p[0] for p in disp.split()[:2]).upper() or "U"
+    return {"email": email, "name": disp, "initials": initials}
+
+
+# Phase-1 stubs (wired to Lakebase in the next phase)
+@app.get("/api/history")
+def _history():
+    return []
+
+
+@app.post("/api/feedback")
+async def _feedback(request: Request):
+    return {"ok": True}
+
+
+if _STATIC.exists():
+    app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
 
 
 def main():

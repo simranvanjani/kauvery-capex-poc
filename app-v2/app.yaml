@@ -1,16 +1,22 @@
-command: ["uv", "run", "start-app"]
-# databricks apps listen by default on port 8000
+command: ["uv", "run", "start-server"]
+# databricks apps listen on port 8000; start-server serves our custom UI + /api + the agent.
 
 env:
   - name: MLFLOW_TRACKING_URI
     value: "databricks"
   - name: MLFLOW_REGISTRY_URI
     value: "databricks-uc"
-  - name: API_PROXY
-    value: "http://localhost:8000/invocations"
-  - name: CHAT_APP_PORT
-    value: "3000"
   - name: CHAT_PROXY_TIMEOUT_SECONDS
     value: "300"
-  - name: MLFLOW_EXPERIMENT_ID
-    valueFrom: "experiment"
+  # Warehouse the agent's UC-function / ai_query SQL tools run against (resource attached to the app).
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: "sql-warehouse"
+  # ---- CAPEX config ----
+  - name: CATALOG
+    value: "kauvey_poc"
+  - name: SCHEMA
+    value: "gold"
+  - name: MODEL_ENDPOINT
+    value: "capex-worth-it"
+  - name: CHAT_MODEL
+    value: "databricks-claude-sonnet-4-5"

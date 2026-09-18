@@ -1,0 +1,587 @@
+<title>CAPEX Copilot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Kauvery Hospital brand: magenta #ee2d68 · cyan #4dc6e1 · petrol #1d4354 */
+  :root{
+    --bg:#FAFAFA; --surface:#FFFFFF; --sidebar:#F4F4F5; --raise:#F7F7F8;
+    --ink:#131316; --ink-2:#3F3F46; --muted:#8A8A90; --line:#EAEAEC; --line-2:#DDDDE0;
+    --accent:#EE2D68; --accent-ink:#C41F57; --accent-weak:rgba(238,45,104,.09);
+    --cyan:#4DC6E1;
+    --accept:#1F8A70; --accept-bg:rgba(31,138,112,.10);
+    --negotiate:#BE7C16; --negotiate-bg:rgba(190,124,22,.12);
+    --reject:#C93A3A; --reject-bg:rgba(201,58,58,.10);
+    --up:#1F8A70; --down:#C93A3A;
+    --radius:12px; --radius-sm:9px;
+    --ui:"Hanken Grotesk",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0A0A0B; --surface:#141416; --sidebar:#0E0E10; --raise:#1A1A1D;
+      --ink:#F3F3F4; --ink-2:#B6B6BC; --muted:#7C7C83; --line:#232327; --line-2:#2E2E33;
+      --accent:#FF477E; --accent-ink:#FF8AAD; --accent-weak:rgba(255,71,126,.14);
+      --cyan:#5FD1E8;
+      --accept:#3FB795; --accept-bg:rgba(63,183,149,.15);
+      --negotiate:#E0A94A; --negotiate-bg:rgba(224,169,74,.16);
+      --reject:#E0736A; --reject-bg:rgba(224,115,106,.15);
+      --up:#3FB795; --down:#E0736A;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0A0A0B; --surface:#141416; --sidebar:#0E0E10; --raise:#1A1A1D;
+    --ink:#F3F3F4; --ink-2:#B6B6BC; --muted:#7C7C83; --line:#232327; --line-2:#2E2E33;
+    --accent:#FF477E; --accent-ink:#FF8AAD; --accent-weak:rgba(255,71,126,.14);
+    --cyan:#5FD1E8;
+    --accept:#3FB795; --accept-bg:rgba(63,183,149,.15);
+    --negotiate:#E0A94A; --negotiate-bg:rgba(224,169,74,.16);
+    --reject:#E0736A; --reject-bg:rgba(224,115,106,.15);
+    --up:#3FB795; --down:#E0736A;
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--ui);
+    font-size:14.5px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  [hidden]{display:none!important}
+  button{font-family:inherit;cursor:pointer}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+  .app{display:grid;grid-template-columns:250px 1fr;height:100%}
+
+  /* sidebar — flat, minimal */
+  .sidebar{background:var(--sidebar);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;min-height:0;padding:16px 12px;gap:4px}
+  .brand{display:flex;align-items:center;gap:10px;padding:4px 8px 16px}
+  .brand .mark{width:26px;height:26px;border-radius:7px;flex:none;display:grid;place-items:center;
+    background:var(--accent);color:#fff;font-weight:700;font-size:14px}
+  .brand .name{font-weight:700;font-size:16px;letter-spacing:-.01em}
+  .brand .sub{font-size:11px;color:var(--muted)}
+  .newbtn{display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;border-radius:var(--radius-sm);
+    border:1px solid var(--line-2);background:var(--surface);color:var(--ink);font-weight:600;font-size:13.5px}
+  .newbtn:hover{border-color:var(--accent);color:var(--accent-ink)}
+  .nav-label{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+    padding:16px 10px 6px;font-weight:600}
+  .histlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px;overflow-y:auto;min-height:0}
+  .histlist a{display:block;padding:7px 10px;border-radius:7px;color:var(--ink-2);text-decoration:none;
+    font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .histlist a:hover{background:var(--surface)}
+  .histlist a.active{background:var(--accent-weak);color:var(--accent-ink);font-weight:600}
+  .side-foot{margin-top:auto;padding-top:12px;border-top:1px solid var(--line);display:flex;align-items:center;gap:10px}
+  .avatar{width:28px;height:28px;border-radius:50%;flex:none;display:grid;place-items:center;
+    background:var(--accent-weak);color:var(--accent-ink);font-weight:700;font-size:11px}
+  .side-foot .who{font-size:12.5px;font-weight:600;line-height:1.2}
+  .side-foot .role{font-size:11px;color:var(--muted)}
+
+  .main{display:flex;flex-direction:column;min-width:0;min-height:0}
+  .topbar{display:flex;align-items:center;gap:12px;padding:14px 26px;border-bottom:1px solid var(--line)}
+  .topbar h1{font-weight:700;font-size:16px;margin:0;letter-spacing:-.01em}
+  .topbar .ctx{font-size:12.5px;color:var(--muted)}
+  .seg{margin-left:auto;display:inline-flex;gap:2px}
+  .seg button{border:none;background:transparent;color:var(--muted);font-weight:600;font-size:13px;
+    padding:6px 12px;border-radius:7px;display:flex;align-items:center;gap:7px}
+  .seg button:hover{color:var(--ink)}
+  .seg button.on{background:var(--accent-weak);color:var(--accent-ink)}
+  .adminflag{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+
+  .view{flex:1;min-height:0;overflow-y:auto}
+
+  /* chat — airy, no heavy cards */
+  .thread{max-width:760px;margin:0 auto;padding:30px 26px 8px}
+  .turn{padding:8px 0 20px}
+  .turn .role-tag{font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-weight:700;
+    color:var(--muted);margin-bottom:8px}
+  .turn.bot .role-tag{color:var(--accent-ink)}
+  .turn.user p{margin:0}
+  .filechip{display:inline-flex;align-items:center;gap:8px;margin-top:10px;padding:7px 12px;border-radius:9px;
+    background:var(--surface);border:1px solid var(--line-2);font-size:13px}
+  .filechip .fx{font-size:11px;font-family:var(--mono);color:var(--accent-ink);font-weight:600}
+  .lead{margin:.2rem 0 18px;color:var(--ink-2)}
+
+  /* review — one hairline container, sections divided by rules (minimal) */
+  .review{border:1px solid var(--line-2);border-radius:var(--radius);background:var(--surface);overflow:hidden}
+  .review-head{display:flex;align-items:center;gap:12px;padding:16px 18px 14px}
+  .review-head .item{font-weight:700;font-size:15px}
+  .review-head .qp{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:3px}
+  .verdict{margin-left:auto;display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:12.5px;
+    padding:5px 12px;border-radius:999px;white-space:nowrap}
+  .verdict.negotiate{color:var(--negotiate);background:var(--negotiate-bg)}
+  .verdict .score{font-family:var(--mono);font-weight:500;opacity:.85}
+  .rsec{padding:16px 18px;border-top:1px solid var(--line)}
+  .rsec h4{margin:0 0 10px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .fair{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .fair .big{font-family:var(--mono);font-size:20px;font-weight:500;color:var(--negotiate)}
+  .fair .cmp{font-size:13px;color:var(--ink-2)}
+  .gaps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:11px}
+  .gaps li{display:flex;gap:10px;align-items:flex-start;font-size:13.5px}
+  .sev{flex:none;margin-top:2px;font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    padding:2px 7px;border-radius:5px}
+  .sev.high{color:var(--reject);background:var(--reject-bg)} .sev.med{color:var(--negotiate);background:var(--negotiate-bg)}
+  .gaps .cite{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
+  .tablewrap{overflow-x:auto}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:520px}
+  th,td{text-align:left;padding:8px 12px 8px 0;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  tbody tr:last-child td{border-bottom:none}
+  td.num,th.num{text-align:right;font-family:var(--mono);padding-right:14px}
+  tr.best td{color:var(--accept)}
+  .tag-best{font-size:9px;font-weight:700;color:var(--accept);border:1px solid var(--accept);border-radius:4px;padding:1px 5px;margin-left:6px}
+  .rec{font-size:13.5px;color:var(--ink);line-height:1.6}
+  .rec b{color:var(--accent-ink)}
+
+  .msg-actions{display:flex;align-items:center;gap:2px;margin-top:14px}
+  .fb-label{font-size:12px;color:var(--muted);margin-right:6px}
+  .iconbtn{width:28px;height:28px;border-radius:7px;border:1px solid transparent;background:transparent;
+    color:var(--muted);display:grid;place-items:center}
+  .iconbtn:hover{background:var(--raise);color:var(--ink)}
+  .iconbtn.up.sel{color:var(--up);background:var(--accept-bg)}
+  .iconbtn.down.sel{color:var(--down);background:var(--reject-bg)}
+  .iconbtn.sel-copy{color:var(--accept)}
+  .iconbtn svg{width:15px;height:15px}
+
+  /* bad-feedback comment box */
+  .fb-note{margin-top:10px;max-width:520px;border:1px solid var(--line-2);border-radius:10px;
+    background:var(--surface);padding:12px 13px}
+  .fb-note label{display:block;font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:7px}
+  .fb-note textarea{width:100%;border:1px solid var(--line-2);border-radius:8px;background:var(--raise);
+    color:var(--ink);font-family:inherit;font-size:13px;padding:8px 10px;resize:none;line-height:1.45}
+  .fb-note textarea:focus{outline:none;border-color:var(--accent)}
+  .fb-note-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:9px}
+  .fb-cancel{border:none;background:transparent;color:var(--muted);font-size:12.5px;font-weight:600;padding:6px 10px;border-radius:7px}
+  .fb-cancel:hover{color:var(--ink)}
+  .fb-submit{border:none;background:var(--accent);color:#fff;font-size:12.5px;font-weight:600;padding:6px 14px;border-radius:7px}
+  .fb-submit:hover{background:var(--accent-ink)}
+
+  /* composer — slim, single line, light */
+  .composer-wrap{padding:12px 26px calc(14px + env(safe-area-inset-bottom,0px));
+    background:linear-gradient(180deg,transparent,var(--bg) 40%)}
+  .composer{max-width:760px;margin:0 auto;background:var(--surface);border:1px solid var(--line-2);
+    border-radius:12px;padding:4px 6px 4px 4px;display:flex;align-items:center;gap:4px}
+  .composer:focus-within{border-color:var(--accent)}
+  .attach{width:34px;height:34px;border-radius:8px;border:none;background:transparent;color:var(--muted);
+    display:grid;place-items:center;flex:none}
+  .attach:hover{color:var(--accent)}
+  .composer textarea{flex:1;border:none;background:transparent;resize:none;color:var(--ink);font-size:14px;
+    font-family:inherit;padding:9px 2px;max-height:120px;line-height:1.4;overflow-y:auto}
+  .composer textarea::placeholder{color:var(--muted)}
+  .send{width:34px;height:34px;border-radius:8px;border:none;background:var(--accent);color:#fff;
+    display:grid;place-items:center;flex:none}
+  .send:hover{background:var(--accent-ink)}
+  .hint{max-width:760px;margin:8px auto 0;font-size:11.5px;color:var(--muted);text-align:center}
+
+  /* monitor */
+  .monitor{max-width:1020px;margin:0 auto;padding:28px 26px}
+  .mon-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .mon-head h2{font-weight:700;font-size:20px;margin:0;letter-spacing:-.01em}
+  .mon-head p{margin:4px 0 0;color:var(--muted);font-size:13px}
+  .range{display:inline-flex;gap:2px}
+  .range button{border:none;background:transparent;color:var(--muted);font-size:12.5px;font-weight:600;padding:5px 11px;border-radius:7px}
+  .range button.on{background:var(--accent-weak);color:var(--accent-ink)}
+  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin:22px 0 26px;
+    background:var(--line);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  .tile{background:var(--surface);padding:16px 18px}
+  .tile .k{font-size:11.5px;color:var(--muted);font-weight:600}
+  .tile .v{font-family:var(--mono);font-size:26px;font-weight:500;margin-top:8px;letter-spacing:-.01em}
+  .tile .d{font-size:11.5px;margin-top:4px;color:var(--muted)}
+  .tile .d.pos{color:var(--accept)} .tile .d.neg{color:var(--reject)}
+
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-bottom:26px}
+  .block h3{margin:0 0 14px;font-size:13px;font-weight:700}
+  .barlabel{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:7px;color:var(--ink-2)}
+  .barlabel .muted{color:var(--muted);font-family:var(--mono)}
+  .bar{height:8px;border-radius:5px;background:var(--line);overflow:hidden;display:flex;gap:2px}
+  .bar span{display:block;height:100%}
+  .legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px;font-size:12px;color:var(--ink-2)}
+  .legend i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px;vertical-align:0}
+
+  .block-title{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
+  .block-title h3{margin:0}
+  .block-title .meta{font-size:12px;color:var(--muted)}
+  .fb{display:inline-flex;align-items:center;gap:5px;font-weight:600;font-size:12px}
+  .fb.up{color:var(--up)} .fb.down{color:var(--down)} .fb.none{color:var(--muted);font-weight:400}
+  .vpill{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px}
+  .vpill.accept{color:var(--accept);background:var(--accept-bg)}
+  .vpill.negotiate{color:var(--negotiate);background:var(--negotiate-bg)}
+  .vpill.reject{color:var(--reject);background:var(--reject-bg)}
+  .montable td{padding:11px 14px 11px 0;vertical-align:top}
+  .montable .q{color:var(--ink);font-weight:500}
+  .montable .u{color:var(--muted);font-size:12px}
+
+  .ribbon{font-size:11px;color:var(--muted);text-align:center;padding:10px;border-top:1px solid var(--line)}
+
+  @media (max-width:820px){
+    .app{grid-template-columns:1fr}.sidebar{display:none}
+    .tiles{grid-template-columns:repeat(2,1fr)}.split{grid-template-columns:1fr;gap:22px}
+  }
+</style>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="mark">K</div>
+      <div><div class="name">CAPEX&nbsp;Copilot</div><div class="sub">Kauvery Hospital</div></div>
+    </div>
+    <button class="newbtn">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      New review
+    </button>
+    <div class="nav-label">Today</div>
+    <nav class="histlist">
+      <a href="#" class="active">vTitan Syringe Pump — review</a>
+      <a href="#">CT Scanner cross-site prices</a>
+      <a href="#">Best vendor for ventilators</a>
+    </nav>
+    <div class="nav-label">Yesterday</div>
+    <nav class="histlist">
+      <a href="#">Philips IntelliVue MX450 quote</a>
+      <a href="#">Dialysis machine — AMC gaps</a>
+    </nav>
+    <div class="side-foot">
+      <div class="avatar">UA</div>
+      <div><div class="who">Udhayakumar A</div><div class="role">Capex team</div></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <h1 id="viewTitle">CAPEX Copilot</h1>
+      <span class="ctx" id="viewCtx">Quotation review</span>
+      <div class="seg" role="tablist" aria-label="View">
+        <button id="tabChat" class="on" role="tab" aria-selected="true" onclick="setView('chat')">Assistant</button>
+        <button id="tabMon" role="tab" aria-selected="false" onclick="setView('mon')">Monitor <span class="adminflag">Admin</span></button>
+      </div>
+    </div>
+
+    <!-- CHAT -->
+    <section class="view" id="chatView">
+      <div class="thread">
+        <div class="turn user">
+          <div class="role-tag">You</div>
+          <p>Please review this quotation.</p>
+          <div class="filechip"><span class="fx">PDF</span> 1019213-Syringe&nbsp;Pump-vTitan.pdf</div>
+        </div>
+
+        <div class="turn bot">
+          <div class="role-tag">CAPEX Copilot</div>
+          <p class="lead">I read the quotation and compared it against Kauvery's purchase history. Here's the review:</p>
+
+          <div class="review">
+            <div class="review-head">
+              <div>
+                <div class="item">vTitan V-Syringe Pump · VP-2000</div>
+                <div class="qp">Medingenious Solutions · Qty 10 · ₹4,15,000 / unit</div>
+              </div>
+              <span class="verdict negotiate">Negotiate <span class="score">54/100</span></span>
+            </div>
+
+            <div class="rsec">
+              <h4>Price fairness</h4>
+              <div class="fair">
+                <span class="big">+11.6%</span>
+                <span class="cmp">above the most-recent comparable purchase — ₹3,72,000, PO KH/CHN/2025-0417 (Chennai).</span>
+              </div>
+            </div>
+
+            <div class="rsec">
+              <h4>Gaps found</h4>
+              <ul class="gaps">
+                <li><span class="sev high">High</span><div>No AMC/CMC quoted.<span class="cite">Benchmark: PO KH/CBE/2024-1183 (Coimbatore) included 2-yr CAMC · p.6</span></div></li>
+                <li><span class="sev high">High</span><div>Warranty 12 months — below the expected 24 for syringe pumps.<span class="cite">Benchmark: PO KH/CHN/2025-0417 · p.4</span></div></li>
+                <li><span class="sev med">Medium</span><div>No free-of-cost starter syringe sets offered.<span class="cite">Benchmark: PO KH/TRY/2024-0902 · p.3</span></div></li>
+                <li><span class="sev med">Medium</span><div>Payment 100% advance — historical norm is on-installation.</div></li>
+              </ul>
+            </div>
+
+            <div class="rsec">
+              <h4>Cross-site history</h4>
+              <div class="tablewrap">
+                <table>
+                  <thead><tr><th>Site</th><th>Vendor</th><th>Date</th><th class="num">Unit price</th><th>Warranty</th><th>Maintenance</th><th>FOC</th></tr></thead>
+                  <tbody>
+                    <tr class="best"><td>Trichy</td><td>MediSpan Health<span class="tag-best">BEST</span></td><td>Aug 2024</td><td class="num">₹3,58,000</td><td>24 mo</td><td>2-yr CAMC</td><td>Yes</td></tr>
+                    <tr><td>Chennai</td><td>Medingenious</td><td>Apr 2025</td><td class="num">₹3,72,000</td><td>24 mo</td><td>1-yr AMC</td><td>Yes</td></tr>
+                    <tr><td>Coimbatore</td><td>B Braun India</td><td>Nov 2024</td><td class="num">₹3,95,000</td><td>36 mo</td><td>2-yr CAMC</td><td>No</td></tr>
+                    <tr><td>Chennai</td><td>Medingenious</td><td>this quote</td><td class="num">₹4,15,000</td><td>12 mo</td><td>None</td><td>No</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="rsec">
+              <h4>Recommendation</h4>
+              <p class="rec">Open at <b>₹3,72,000</b> and require <b>24-month warranty + 2-yr CAMC + FOC syringe sets</b> before accepting. <b>MediSpan Health</b> has the best bundled value historically — worth a parallel quote for leverage.</p>
+            </div>
+          </div>
+
+          <div class="msg-actions">
+            <span class="fb-label">Helpful?</span>
+            <button class="iconbtn up" aria-label="Helpful" onclick="fb(this,'up')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v11M2 12v7a2 2 0 0 0 2 2h13.3a2 2 0 0 0 2-1.7l1.1-7a2 2 0 0 0-2-2.3H14V5a2 2 0 0 0-2-2l-3 7"/></svg>
+            </button>
+            <button class="iconbtn down" aria-label="Not helpful" onclick="fb(this,'down')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V3M22 12V5a2 2 0 0 0-2-2H6.7a2 2 0 0 0-2 1.7l-1.1 7A2 2 0 0 0 5.6 14H10v4a2 2 0 0 0 2 2l3-7"/></svg>
+            </button>
+            <button class="iconbtn copy" aria-label="Copy review" title="Copy review" onclick="copyReview(this)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+            </button>
+          </div>
+
+          <div class="fb-note" id="fbNote" hidden>
+            <label for="fbNoteText">What went wrong with this review?</label>
+            <textarea id="fbNoteText" rows="2" placeholder="e.g. missed a line item, wrong benchmark, or the gaps were off"></textarea>
+            <div class="fb-note-actions">
+              <button class="fb-cancel" onclick="closeFbNote()">Cancel</button>
+              <button class="fb-submit" onclick="submitFbNote()">Send feedback</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="composer-wrap">
+        <div class="composer">
+          <button class="attach" aria-label="Attach quotation PDF" title="Attach quotation PDF">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.48-8.49"/></svg>
+          </button>
+          <textarea rows="1" placeholder="Attach a quotation PDF, or ask about an instrument or vendor"></textarea>
+          <button class="send" aria-label="Send">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 14-7-7 14-2-5-5-2Z"/></svg>
+          </button>
+        </div>
+        <div class="hint">Uploading a PDF starts the review automatically. Quotations aren't stored — only your history (7 days) and the final decision.</div>
+      </div>
+    </section>
+
+    <!-- MONITOR -->
+    <section class="view" id="monView" hidden>
+      <div class="monitor">
+        <div class="mon-head">
+          <div>
+            <h2>Usage &amp; feedback</h2>
+            <p>Every review across the capex team, with the feedback people left. Admins only.</p>
+          </div>
+          <div class="range" role="group" aria-label="Range"><button>24h</button><button class="on">7 days</button><button>30 days</button></div>
+        </div>
+
+        <div class="tiles">
+          <div class="tile"><div class="k">Reviews run</div><div class="v">128</div><div class="d pos">▲ 22% vs prior 7d</div></div>
+          <div class="tile"><div class="k">Helpful rate</div><div class="v">86%</div><div class="d">74 👍 · 12 👎</div></div>
+          <div class="tile"><div class="k">Active users</div><div class="v">9</div><div class="d">of 11 on the team</div></div>
+          <div class="tile"><div class="k">Avg worth-score</div><div class="v">61</div><div class="d neg">▼ 4 · weaker quotes</div></div>
+        </div>
+
+        <div class="split">
+          <div class="block">
+            <h3>Feedback</h3>
+            <div class="barlabel"><span>Helpful vs not</span><span class="muted">74 · 12</span></div>
+            <div class="bar"><span style="width:86%;background:var(--up)"></span><span style="width:14%;background:var(--down)"></span></div>
+            <div class="legend"><span><i style="background:var(--up)"></i>Helpful</span><span><i style="background:var(--down)"></i>Not helpful</span></div>
+          </div>
+          <div class="block">
+            <h3>Verdict mix</h3>
+            <div class="barlabel"><span>128 line items</span><span class="muted">33 · 71 · 24</span></div>
+            <div class="bar"><span style="width:26%;background:var(--accept)"></span><span style="width:55%;background:var(--negotiate)"></span><span style="width:19%;background:var(--reject)"></span></div>
+            <div class="legend"><span><i style="background:var(--accept)"></i>Accept</span><span><i style="background:var(--negotiate)"></i>Negotiate</span><span><i style="background:var(--reject)"></i>Reject</span></div>
+          </div>
+        </div>
+
+        <div class="block">
+          <div class="block-title"><h3>All reviews</h3><span class="meta">newest first</span></div>
+          <div class="tablewrap">
+            <table class="montable" style="min-width:600px">
+              <thead><tr><th>When</th><th>User</th><th>Item</th><th>Verdict</th><th>Feedback</th></tr></thead>
+              <tbody>
+                <tr><td class="u">10:42</td><td>Udhayakumar A</td><td><span class="q">vTitan Syringe Pump</span><br><span class="u">₹4.15L · Medingenious</span></td><td><span class="vpill negotiate">Negotiate</span></td><td><span class="fb up">👍 Helpful</span></td></tr>
+                <tr><td class="u">10:31</td><td>Prasanthkumar A</td><td><span class="q">CT Scanner — cross-site</span><br><span class="u">GE Revolution 128</span></td><td><span class="vpill accept">Accept</span></td><td><span class="fb up">👍 Helpful</span></td></tr>
+                <tr><td class="u">09:58</td><td>Aravind Ganesan</td><td><span class="q">Ventilator — Draeger V600</span><br><span class="u">₹9.8L · 100% advance</span></td><td><span class="vpill reject">Reject</span></td><td><span class="fb down">👎 “missed the AMC line”</span></td></tr>
+                <tr><td class="u">09:20</td><td>Udhayakumar A</td><td><span class="q">Patient monitors — best vendor</span><br><span class="u">Philips vs Mindray</span></td><td><span class="vpill accept">Accept</span></td><td><span class="fb none">not rated</span></td></tr>
+                <tr><td class="u">Yst</td><td>Aparna Bansal</td><td><span class="q">Dialysis — AMC gaps</span><br><span class="u">Fresenius 4008S</span></td><td><span class="vpill negotiate">Negotiate</span></td><td><span class="fb up">👍 Helpful</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="ribbon" id="ribbon">Monitor uses sample data · live chat &amp; PDF review are connected</div>
+  </div>
+</div>
+
+<script>
+  function setView(v){
+    const chat = v === 'chat';
+    document.getElementById('chatView').hidden = !chat;
+    document.getElementById('monView').hidden = chat;
+    document.getElementById('tabChat').classList.toggle('on', chat);
+    document.getElementById('tabMon').classList.toggle('on', !chat);
+    document.getElementById('tabChat').setAttribute('aria-selected', chat);
+    document.getElementById('tabMon').setAttribute('aria-selected', !chat);
+    document.getElementById('viewTitle').textContent = chat ? 'CAPEX Copilot' : 'Monitor';
+    document.getElementById('viewCtx').textContent = chat ? 'Quotation review' : 'Admin · usage & feedback';
+  }
+  function fb(btn, kind){
+    const row = btn.parentElement;
+    row.querySelectorAll('.iconbtn.up, .iconbtn.down').forEach(b => b.classList.remove('sel'));
+    btn.classList.add('sel');
+    const label = row.querySelector('.fb-label');
+    const note = document.getElementById('fbNote');
+    if (kind === 'down'){
+      if (label) label.textContent = 'Sorry about that —';
+      note.hidden = false;
+      note.querySelector('textarea').focus();
+    } else {
+      if (label) label.textContent = 'Logged as helpful';
+      note.hidden = true;
+    }
+  }
+  const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+  function copyReview(btn){
+    const review = document.querySelector('.review');
+    const text = review ? review.innerText.replace(/\n{3,}/g, '\n\n').trim() : '';
+    const done = () => {
+      const orig = btn.innerHTML; btn.innerHTML = CHECK; btn.classList.add('sel-copy'); btn.title = 'Copied';
+      setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('sel-copy'); btn.title = 'Copy review'; }, 1400);
+    };
+    if (navigator.clipboard && window.isSecureContext){
+      navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+    } else {
+      fallbackCopy(text, done);
+    }
+  }
+  function fallbackCopy(text, done){
+    const t = document.createElement('textarea');
+    t.value = text; t.style.position = 'fixed'; t.style.opacity = '0';
+    document.body.appendChild(t); t.focus(); t.select();
+    try { document.execCommand('copy'); done(); } catch (e) { /* clipboard blocked */ }
+    document.body.removeChild(t);
+  }
+  function closeFbNote(){ document.getElementById('fbNote').hidden = true; }
+  function submitFbNote(){
+    const note = document.getElementById('fbNote');
+    const label = document.querySelector('.fb-label');
+    note.hidden = true;
+    if (label) label.textContent = 'Thanks — feedback sent to the team';
+  }
+  const ta = document.querySelector('.composer textarea');
+  if (ta) ta.addEventListener('input', () => { ta.style.height='auto'; ta.style.height=Math.min(ta.scrollHeight,120)+'px'; });
+
+  /* ============ LIVE WIRING: chat + PDF review ============ */
+  const SESSION_ID = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
+  const convo = [];              // [{role, content}]
+  let mockCleared = false;
+  const thread = document.querySelector('.thread');
+
+  function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // compact markdown -> HTML (headings, bold/italic, code, lists, GFM tables, paragraphs)
+  function md(src){
+    const lines = (src||'').replace(/\r/g,'').split('\n');
+    let out=[], i=0;
+    const inline = t => esc(t)
+      .replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')
+      .replace(/`(.+?)`/g,'<code>$1</code>')
+      .replace(/\*(.+?)\*/g,'<em>$1</em>');
+    while(i<lines.length){
+      let ln=lines[i];
+      if(/^\s*\|.*\|\s*$/.test(ln) && i+1<lines.length && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i+1])){
+        const cells = r => r.trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
+        const head=cells(ln); i+=2; let rows=[];
+        while(i<lines.length && /^\s*\|.*\|\s*$/.test(lines[i])){ rows.push(cells(lines[i])); i++; }
+        out.push('<div class="tablewrap"><table><thead><tr>'+head.map(h=>'<th>'+inline(h)+'</th>').join('')+'</tr></thead><tbody>'+
+          rows.map(r=>'<tr>'+r.map(c=>'<td>'+inline(c)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>');
+        continue;
+      }
+      let m;
+      if((m=ln.match(/^(#{1,4})\s+(.*)$/))){ out.push('<h4 style="margin:14px 0 6px">'+inline(m[2])+'</h4>'); i++; continue; }
+      if(/^\s*[-*]\s+/.test(ln)){
+        let items=[]; while(i<lines.length && /^\s*[-*]\s+/.test(lines[i])){ items.push('<li>'+inline(lines[i].replace(/^\s*[-*]\s+/,''))+'</li>'); i++; }
+        out.push('<ul style="margin:6px 0;padding-left:18px">'+items.join('')+'</ul>'); continue;
+      }
+      if(ln.trim()===''){ i++; continue; }
+      let para=[]; while(i<lines.length && lines[i].trim()!=='' && !/^\s*[-*#|]/.test(lines[i])){ para.push(lines[i]); i++; }
+      out.push('<p style="margin:8px 0">'+inline(para.join(' '))+'</p>');
+    }
+    return out.join('');
+  }
+
+  const FB_ACTIONS = `
+    <div class="msg-actions">
+      <span class="fb-label">Helpful?</span>
+      <button class="iconbtn up" aria-label="Helpful" onclick="fb(this,'up')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v11M2 12v7a2 2 0 0 0 2 2h13.3a2 2 0 0 0 2-1.7l1.1-7a2 2 0 0 0-2-2.3H14V5a2 2 0 0 0-2-2l-3 7"/></svg></button>
+      <button class="iconbtn down" aria-label="Not helpful" onclick="fb(this,'down')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V3M22 12V5a2 2 0 0 0-2-2H6.7a2 2 0 0 0-2 1.7l-1.1 7A2 2 0 0 0 5.6 14H10v4a2 2 0 0 0 2 2l3-7"/></svg></button>
+    </div>`;
+
+  function clearMock(){ if(mockCleared) return; thread.innerHTML=''; mockCleared=true; }
+
+  function addUser(text, chipName){
+    clearMock();
+    const el=document.createElement('div'); el.className='turn user';
+    el.innerHTML='<div class="role-tag">You</div><p>'+esc(text||'')+'</p>'+
+      (chipName?('<div class="filechip"><span class="fx">PDF</span> '+esc(chipName)+'</div>'):'');
+    thread.appendChild(el); scroll();
+  }
+  function addBot(html){
+    const el=document.createElement('div'); el.className='turn bot';
+    el.innerHTML='<div class="role-tag">CAPEX Copilot</div><div class="botbody">'+html+'</div>'+FB_ACTIONS;
+    thread.appendChild(el); scroll(); return el.querySelector('.botbody');
+  }
+  function scroll(){ const v=document.getElementById('chatView'); if(v) v.scrollTop=v.scrollHeight; }
+
+  async function ask(text){
+    convo.push({role:'user', content:text});
+    const body = addBot('<p class="lead" style="color:var(--muted)">Reviewing…</p>');
+    try{
+      const r = await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({session_id:SESSION_ID, messages:convo})});
+      const j = await r.json();
+      const txt = j.text || j.error || '(no response)';
+      convo.push({role:'assistant', content:txt});
+      body.innerHTML = md(txt);
+    }catch(e){ body.innerHTML='<p style="color:var(--reject)">Error: '+esc(String(e))+'</p>'; }
+    scroll();
+  }
+
+  function submitComposer(){
+    const t=(ta.value||'').trim(); if(!t) return;
+    ta.value=''; ta.style.height='auto';
+    addUser(t); ask(t);
+  }
+
+  // send button + Enter
+  const sendBtn=document.querySelector('.composer .send');
+  if(sendBtn) sendBtn.addEventListener('click', submitComposer);
+  if(ta) ta.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); submitComposer(); }});
+
+  // attach PDF -> upload -> auto-review
+  const attachBtn=document.querySelector('.composer .attach');
+  const fileInput=document.createElement('input'); fileInput.type='file'; fileInput.accept='application/pdf,.pdf'; fileInput.hidden=true;
+  document.body.appendChild(fileInput);
+  if(attachBtn) attachBtn.addEventListener('click',()=>fileInput.click());
+  fileInput.addEventListener('change', async ()=>{
+    const f=fileInput.files[0]; if(!f) return;
+    addUser('Please review this quotation.', f.name);
+    const body = addBot('<p class="lead" style="color:var(--muted)">Uploading & reviewing…</p>');
+    try{
+      const up=await fetch('/api/upload',{method:'POST',headers:{'X-Filename':f.name,'Content-Type':'application/octet-stream'},body:f}); const uj=await up.json();
+      if(!uj.volume_path) throw new Error(uj.error||'upload failed');
+      const prompt='Please review this quotation PDF: '+uj.volume_path;
+      convo.push({role:'user', content:prompt});
+      const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({session_id:SESSION_ID, messages:convo})});
+      const j=await r.json(); const txt=j.text||j.error||'(no response)';
+      convo.push({role:'assistant', content:txt}); body.innerHTML=md(txt);
+    }catch(e){ body.innerHTML='<p style="color:var(--reject)">Error: '+esc(String(e))+'</p>'; }
+    fileInput.value=''; scroll();
+  });
+
+  // new review resets the thread
+  const newBtn=document.querySelector('.newbtn');
+  if(newBtn) newBtn.addEventListener('click',()=>{ convo.length=0; mockCleared=false; location.reload(); });
+
+  // identity
+  fetch('/api/me').then(r=>r.json()).then(me=>{
+    if(!me) return;
+    const av=document.querySelector('.side-foot .avatar'); if(av&&me.initials) av.textContent=me.initials;
+    const who=document.querySelector('.side-foot .who'); if(who&&me.name) who.textContent=me.name;
+  }).catch(()=>{});
+</script>
