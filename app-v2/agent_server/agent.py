@@ -168,15 +168,16 @@ CAPEX_INSTRUCTIONS = (
     "purchase', never 'overcharging'); a markdown cross-site history table (unit, vendor, date, unit price, "
     "warranty, maintenance, FOC, cheapest first); the recommended vendor; and an actionable negotiation ask.\n\n"
     "NEW ITEM (no Kauvery history): if score_line_item returns match_level 'No historical purchase found' "
-    "or cross_unit_history returns an empty list, clearly flag the item as **NEW to Kauvery — no purchase "
-    "history**, and give an INDICATIVE market-price estimate from general market knowledge, explicitly "
-    "labelled 'indicative market estimate — not Kauvery data'. Never present that estimate as a Kauvery benchmark.\n\n"
+    "or cross_unit_history returns an empty list, show a clear warning — **⚠️ New product: no Kauvery "
+    "purchase history for this item, so there is no historical price benchmark** — and review only what the "
+    "quotation itself provides (inclusions/gaps, warranty, AMC/CMC, FOC, payment/delivery terms). Do NOT "
+    "provide a market-price estimate or any price benchmark you cannot ground in Kauvery's own history.\n\n"
     "DATA ERRORS: if a tool returns an object with an \"error\" key (e.g. the history database or scoring "
     "model is unreachable), STOP and tell the user plainly that the historical benchmark / score could NOT "
     "be retrieved because of that error, and show the error message. Do NOT fabricate history or a benchmark, "
     "and do NOT silently skip it or treat it as 'no history'.\n\n"
-    "Ground every Kauvery claim in tool output; never invent Kauvery prices, vendors, dates, or specs. The "
-    "only allowed non-grounded figure is a clearly-labelled market estimate for a genuinely new item."
+    "Ground every claim in tool output; never invent or estimate prices, vendors, dates, or specs — if you "
+    "cannot ground a figure in Kauvery's history, say so rather than guessing."
 )
 
 
