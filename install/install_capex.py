@@ -49,7 +49,7 @@ MODEL_NAME       = "capex_worth_it"   # registered model (Unity Catalog)
 ENDPOINT         = "capex-worth-it"   # model serving endpoint (lowercase + hyphens, <= 63 chars)
 
 # --- Conversation history + feedback ------------------------------------------
-LAKEBASE_PROJECT = "capex-v2"         # Lakebase (Postgres) project
+LAKEBASE_PROJECT = "capex-v2"         # Lakebase project_id (lowercase + hyphens — NOT the display name)
 
 # --- Foundation models the app calls ------------------------------------------
 CHAT_MODEL       = "databricks-claude-sonnet-4-5"   # agent chat model — MUST support tool-calling (Claude)
@@ -70,6 +70,10 @@ LAKEBASE_SCHEMA = "capex_app"   # Postgres schema the app's service principal cr
 
 from databricks.sdk import WorkspaceClient
 w = WorkspaceClient()
+
+def _brief(err):  # one-line reason only — never dump a full JVM/SDK stacktrace to the customer
+    return str(err).strip().splitlines()[0][:300]
+
 print("Running as:", w.current_user.me().user_name)
 print("Target     :", f"{CATALOG}.{SCHEMA}  · model {MODEL_NAME}  · endpoint {ENDPOINT}  · app {APP_NAME}")
 
@@ -79,13 +83,15 @@ print("Target     :", f"{CATALOG}.{SCHEMA}  · model {MODEL_NAME}  · endpoint {
 
 # COMMAND ----------
 
+# CREATE CATALOG can fail harmlessly when the catalog already exists or the account uses Default
+# Storage — the schema + volume steps below are the real check, so we don't surface that here.
 try:
     spark.sql(f"CREATE CATALOG IF NOT EXISTS {CATALOG}")
-except Exception as e:
-    print(f"[note] could not create catalog (fine if it already exists): {e}")
+except Exception:
+    pass
 spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOG}.{SCHEMA}")
 spark.sql(f"CREATE VOLUME IF NOT EXISTS {CATALOG}.{SCHEMA}.{VOLUME}")
-print("catalog / schema / volume ready")
+print(f"catalog / schema / volume ready: {CATALOG}.{SCHEMA}.{VOLUME}")
 
 # COMMAND ----------
 
@@ -188,7 +194,7 @@ else:
         model_exists = True
         print("training complete — new version registered and @prod moved to it (endpoint updates in step 5).")
     except Exception as e:
-        print(f"[action needed] couldn't auto-run the training notebook ({e}).")
+        print(f"[action needed] couldn't auto-run the training notebook: {_brief(e)}")
         print(f"  Fix: set TRAIN_NOTEBOOK_PATH above to the real path of capex_phase2_demo, OR")
         print(f"  open capex_phase2_demo, set data_source=real + catalog={CATALOG} + schema={SCHEMA}, "
               f"Run All, then re-run this cell.")
@@ -221,8 +227,8 @@ try:
         print(f"creating {ENDPOINT} -> {FULL_MODEL} v{prod_version} (@prod)")
         w.serving_endpoints.create(name=ENDPOINT, config=EndpointCoreConfigInput(served_entities=[entity]))
 except Exception as e:
-    print(f"[action needed] endpoint step failed ({e}). If the model isn't trained yet or has no @prod "
-          f"alias, finish step 4 then re-run this cell.")
+    print(f"[action needed] endpoint step failed: {_brief(e)}. If the model isn't trained yet or has no "
+          f"@prod alias, finish step 4 then re-run this cell.")
 
 # COMMAND ----------
 
@@ -232,18 +238,17 @@ except Exception as e:
 
 try:
     projects = [p.project_id for p in w.postgres.list_projects()]
-    if LAKEBASE_PROJECT in projects:
-        print(f"Lakebase project '{LAKEBASE_PROJECT}' already exists — leaving it.")
-    else:
-        print(f"creating Lakebase project '{LAKEBASE_PROJECT}' …")
-        w.postgres.create_project(
-            project_id=LAKEBASE_PROJECT,
-            spec={"display_name": "Kauvery CAPEX — conversation history + feedback"})
-        print("created (scale-to-zero, 7-day retention).")
 except Exception as e:
-    print(f"[action needed] Lakebase step needs attention ({e}).")
-    print("  Create it once in Compute → Lakebase, or via CLI: "
-          f"databricks postgres create-project {LAKEBASE_PROJECT}")
+    projects = []
+    print(f"[note] couldn't list Lakebase projects: {_brief(e)}")
+
+if LAKEBASE_PROJECT in projects:
+    print(f"Lakebase project '{LAKEBASE_PROJECT}' ready (reusing existing).")
+else:
+    print(f"[create once] Lakebase project '{LAKEBASE_PROJECT}' not found — create it, then re-run this cell:")
+    print(f"  databricks postgres create-project {LAKEBASE_PROJECT} "
+          f"--json '{{\"spec\": {{\"display_name\": \"CAPEX conversation history + feedback\"}}}}'")
+    print("  (or Compute → Lakebase → New project). LAKEBASE_PROJECT in §1 must be the project_id, not the display name.")
 
 # COMMAND ----------
 
@@ -280,7 +285,7 @@ try:
         fh.write(app_yaml)
     print(f"✅ wrote {WS_APP_PATH}/app.yaml from §1\n")
 except Exception as e:
-    print(f"[note] couldn't auto-write app.yaml ({e}) — paste this into app-v2/app.yaml:\n\n{app_yaml}")
+    print(f"[note] couldn't auto-write app.yaml: {_brief(e)} — paste this into app-v2/app.yaml:\n\n{app_yaml}")
     WS_APP_PATH = "/Workspace/Users/<you>/kauvery-capex-poc/app-v2"
 
 # Service-principal grants (save as resources.json, then attach with create-update)
