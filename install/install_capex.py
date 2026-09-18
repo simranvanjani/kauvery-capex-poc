@@ -10,7 +10,7 @@
 # MAGIC |---|---|
 # MAGIC | 1 | catalog / schema / landing volume (create if missing) |
 # MAGIC | 2 | the 3 Unity Catalog functions (`CREATE OR REPLACE` — always refreshed) |
-# MAGIC | 3 | the ML model `capex_worth_it` (train via the notebook if missing) |
+# MAGIC | 3 | the ML model `capex_worth_it` (train if missing; **retrain when _Update existing assets_ = yes**) |
 # MAGIC | 4 | the serving endpoint `capex-worth-it` (create, or update to the latest `@prod`) |
 # MAGIC | 5 | a Lakebase project for conversation history (create if missing) |
 # MAGIC | 6 | the CAPEX app (guided — see the last cell) |
@@ -36,6 +36,7 @@ dbutils.widgets.text("volume", "landing", "Landing volume")
 dbutils.widgets.text("model_name", "capex_worth_it", "Registered model name")
 dbutils.widgets.text("endpoint", "capex-worth-it", "Model serving endpoint")
 dbutils.widgets.text("lakebase_project", "capex-v2", "Lakebase project")
+dbutils.widgets.dropdown("update_assets", "no", ["no", "yes"], "Update existing assets (retrain model)")
 
 CATALOG = dbutils.widgets.get("catalog").strip()
 SCHEMA = dbutils.widgets.get("schema").strip()
@@ -43,6 +44,9 @@ VOLUME = dbutils.widgets.get("volume").strip()
 MODEL_NAME = dbutils.widgets.get("model_name").strip()
 ENDPOINT = dbutils.widgets.get("endpoint").strip()
 LAKEBASE_PROJECT = dbutils.widgets.get("lakebase_project").strip()
+# "yes" refreshes assets from a prior (v1) install — chiefly retraining/re-registering the model.
+# UC functions and the serving endpoint are refreshed on every run regardless of this flag.
+UPDATE_ASSETS = dbutils.widgets.get("update_assets").strip() == "yes"
 
 FULL_MODEL = f"{CATALOG}.{SCHEMA}.{MODEL_NAME}"
 HIST_TABLE = f"{CATALOG}.{SCHEMA}.extracted_pdf_datas"
@@ -135,11 +139,13 @@ print("functions ready: cross_unit_history, recommend_vendor, price_fairness")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 4 · ML model  (train via `capex_phase2_demo` if missing)
+# MAGIC ## 4 · ML model  (train if missing, or retrain when *Update existing assets* = yes)
 # MAGIC If `capex_worth_it` isn't registered yet, this runs the training notebook against your real data
-# MAGIC (`data_source=real`). The training notebook lives at `../notebooks/capex_phase2_demo` — this resolves
-# MAGIC when the whole repo is imported as a **Git folder** (keeping the `install/` + `notebooks/` layout).
-# MAGIC If you imported notebooks individually, set `TRAIN_NOTEBOOK_PATH` below to its actual path.
+# MAGIC (`data_source=real`). If it **already exists** (a prior v1 install) it's left as-is — **unless** you set
+# MAGIC the **Update existing assets** widget to `yes`, which retrains and re-registers `@prod` (use this to pick
+# MAGIC up model/logic changes, e.g. the removal of equipment categories). The training notebook lives at
+# MAGIC `../notebooks/capex_phase2_demo` — resolves when the repo is imported as a **Git folder**. If you imported
+# MAGIC notebooks individually, set `TRAIN_NOTEBOOK_PATH` below to its actual path.
 
 # COMMAND ----------
 
@@ -151,14 +157,19 @@ model_exists = False
 try:
     w.registered_models.get(FULL_MODEL)
     model_exists = True
-    print(f"{FULL_MODEL} already registered — leaving it (re-run capex_phase2_demo to retrain).")
 except Exception:
-    print(f"{FULL_MODEL} not found — training now via {TRAIN_NOTEBOOK_PATH} …")
+    model_exists = False
+
+if model_exists and not UPDATE_ASSETS:
+    print(f"{FULL_MODEL} already registered — leaving it (set 'Update existing assets' = yes to retrain).")
+else:
+    reason = "retraining (update mode)" if model_exists else "not found — training"
+    print(f"{FULL_MODEL} {reason} via {TRAIN_NOTEBOOK_PATH} …")
     try:
         dbutils.notebook.run(TRAIN_NOTEBOOK_PATH, 3600, {
             "data_source": "real", "catalog": CATALOG, "schema": SCHEMA, "model_name": MODEL_NAME})
         model_exists = True
-        print("training complete.")
+        print("training complete — new version registered and @prod moved to it (endpoint updates in step 5).")
     except Exception as e:
         print(f"[action needed] couldn't auto-run the training notebook ({e}).")
         print(f"  Fix: set TRAIN_NOTEBOOK_PATH above to the real path of capex_phase2_demo, OR")
