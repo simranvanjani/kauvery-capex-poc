@@ -420,19 +420,10 @@ for cat, g in hd.groupby("_category"):
     rec["freq_max"] = int(g["po_number"].nunique())
     benchmark_index["by_category"][cat] = rec
 
-# Reference BOM — curated per category, informed by historical inclusion rates.
+# Reference BOM — single universal standard (category removed). What a complete purchase should
+# include; applied to every item. detect_gaps reads it via its "_default" fallback.
 reference_bom = {
-    "_default":               {"min_warranty_months": 24, "requires": ["amc_camc", "training", "installation_commissioning"]},
-    "Patient Monitor":        {"min_warranty_months": 24, "requires": ["amc_camc", "foc_accessories", "training", "installation_commissioning"]},
-    "Ventilator":             {"min_warranty_months": 24, "requires": ["amc_camc", "foc_accessories", "training", "installation_commissioning"]},
-    "CT Scanner":             {"min_warranty_months": 24, "requires": ["amc_camc", "foc_accessories", "training", "installation_commissioning"]},
-    "MRI":                    {"min_warranty_months": 24, "requires": ["amc_camc", "foc_accessories", "training", "installation_commissioning"]},
-    "Cath Lab":               {"min_warranty_months": 24, "requires": ["amc_camc", "foc_accessories", "training", "installation_commissioning"]},
-    "Ultrasound":             {"min_warranty_months": 24, "requires": ["amc_camc", "training", "installation_commissioning"]},
-    "Dialysis Machine":       {"min_warranty_months": 24, "requires": ["amc_camc", "foc_accessories", "training"]},
-    "Anesthesia Workstation": {"min_warranty_months": 24, "requires": ["amc_camc", "training", "installation_commissioning"]},
-    "Defibrillator":          {"min_warranty_months": 24, "requires": ["amc_camc", "training"]},
-    "Infusion Pump":          {"min_warranty_months": 24, "requires": ["amc_camc", "foc_accessories"]},
+    "_default": {"min_warranty_months": 24, "requires": ["amc_camc", "training", "installation_commissioning"]},
 }
 
 # Component examples — a real historical PO that included each component, for citations.
@@ -522,25 +513,11 @@ MODEL_INPUT_COLS = ["item_description", "make_brand", "model_no", "qty", "unit_r
                     "has_training", "has_installation"]
 WEIGHTS = {"price": 50, "warranty": 30, "amc_camc": 8, "foc": 5, "delivery": 3, "frequency": 2, "payment": 2}
 
-CATEGORY_KEYWORDS = {
-    "CT Scanner": ["ct scanner", "somatom", "revolution ct", "ingenuity ct", "128 slice", "128-slice"],
-    "MRI": ["mri", "magnetom", "signa", "achieva", "ingenia", "tesla", "1.5t", "3t"],
-    "Cath Lab": ["cath lab", "azurion", "artis", "allia", "angiography", "cardiac cath"],
-    "Ventilator": ["ventilator", "evita", "hamilton", "trilogy"],
-    "Ultrasound": ["ultrasound", "voluson", "epiq", "resona", "logiq", "sonography"],
-    "Patient Monitor": ["patient monitor", "intellivue", "bedside monitor", "b450", "b650", "umec", "benevision", "bsm-"],
-    "Defibrillator": ["defibrillator", "heartstart", "zoll", "aed"],
-    "Anesthesia Workstation": ["anesthesia", "anaesthesia", "perseus", "aisys"],
-    "Infusion Pump": ["infusion pump", "syringe pump", "infusomat", "benefusion", "sigma spectrum"],
-    "Dialysis Machine": ["dialysis", "hemodialysis", "fresenius", "surdial", "4008", "5008"],
-}
-
+# Category removed — the real data has no equipment-type column and the demo taxonomy did not fit
+# it. Benchmarks now match model_no -> make_brand -> all-history, and gap detection uses a single
+# universal Reference BOM. classify_category is kept as a constant so downstream lookups stay valid.
 def classify_category(text):
-    t = str(text).lower()
-    for cat, kws in CATEGORY_KEYWORDS.items():
-        if any(kw in t for kw in kws):
-            return cat
-    return "Other"
+    return "General"
 
 def _clip01(x):
     return float(max(0.0, min(1.0, x)))
