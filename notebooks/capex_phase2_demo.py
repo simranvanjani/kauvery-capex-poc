@@ -529,6 +529,7 @@ for _, r in result.iterrows():
 # COMMAND ----------
 
 # Write the comparison sheet back to Delta (rendered in-app / exportable to Excel downstream).
+from datetime import datetime, timezone
 comp = result.copy()
 comp["scored_at"] = datetime.now(timezone.utc)
 comp["quote_ref"] = quote["quote_ref"]
