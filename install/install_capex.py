@@ -143,21 +143,31 @@ RETURN (
     ORDER BY value_score DESC, min_price ASC LIMIT 20 ) )
 """)
 
-spark.sql(f"""
-CREATE OR REPLACE FUNCTION {CATALOG}.{SCHEMA}.price_fairness(
-  item_description STRING, make_brand STRING, model_no STRING, qty INT, unit_rate DOUBLE,
-  warranty_months INT, amc_present BOOLEAN, foc_present BOOLEAN, delivery_lead_days INT,
-  payment_terms STRING, has_training BOOLEAN, has_installation BOOLEAN)
-RETURNS STRING
-COMMENT 'Scores one quotation line item via the {ENDPOINT} model serving endpoint.'
-RETURN ai_query('{ENDPOINT}', named_struct(
-  'item_description', item_description, 'make_brand', make_brand, 'model_no', model_no,
-  'qty', qty, 'unit_rate', unit_rate, 'warranty_months', warranty_months,
-  'amc_present', amc_present, 'camc_present', false, 'foc_present', foc_present,
-  'delivery_lead_days', delivery_lead_days, 'payment_terms', payment_terms,
-  'has_training', has_training, 'has_installation', has_installation))
-""")
-print("functions ready: cross_unit_history, recommend_vendor, price_fairness")
+# price_fairness wraps the serving endpoint via ai_query, and Databricks validates that endpoint at
+# CREATE time. On a first install the endpoint doesn't exist yet (it's built in §5), so this would
+# fail. It's OPTIONAL — the app scores via the endpoint directly, not this function — so create it
+# best-effort; re-run this cell after §5 (or on a later install) once the endpoint is READY.
+try:
+    spark.sql(f"""
+    CREATE OR REPLACE FUNCTION {CATALOG}.{SCHEMA}.price_fairness(
+      item_description STRING, make_brand STRING, model_no STRING, qty INT, unit_rate DOUBLE,
+      warranty_months INT, amc_present BOOLEAN, foc_present BOOLEAN, delivery_lead_days INT,
+      payment_terms STRING, has_training BOOLEAN, has_installation BOOLEAN)
+    RETURNS STRING
+    COMMENT 'Scores one quotation line item via the {ENDPOINT} model serving endpoint.'
+    RETURN ai_query('{ENDPOINT}', named_struct(
+      'item_description', item_description, 'make_brand', make_brand, 'model_no', model_no,
+      'qty', qty, 'unit_rate', unit_rate, 'warranty_months', warranty_months,
+      'amc_present', amc_present, 'camc_present', false, 'foc_present', foc_present,
+      'delivery_lead_days', delivery_lead_days, 'payment_terms', payment_terms,
+      'has_training', has_training, 'has_installation', has_installation))
+    """)
+    print("functions ready: cross_unit_history, recommend_vendor, price_fairness")
+except Exception as e:
+    print("functions ready: cross_unit_history, recommend_vendor")
+    print(f"[skipped] price_fairness needs the '{ENDPOINT}' serving endpoint to exist first "
+          f"({_brief(e)}). It's optional — the app scores via the endpoint directly. Re-run this "
+          f"cell after §5 creates the endpoint if you want the SQL/Genie scorer function.")
 
 # COMMAND ----------
 
