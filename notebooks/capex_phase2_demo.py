@@ -96,7 +96,6 @@ print("catalog / schema / volume ready")
 import pandas as pd, numpy as np
 
 hist_pdf = spark.table(HIST_TABLE).toPandas()   # your real, tabular history — no PDF parsing
-hist_pdf["_category"] = "General"                # single universal benchmark (categories removed)
 hist_pdf["po_date"] = pd.to_datetime(hist_pdf["po_date"], errors="coerce").dt.strftime("%d/%m/%y")
 missing = [c for c in ["unit_rate","po_date","model_no","make_brand","po_number","unit_name",
                        "warranty_months","amc_value","camc_value","foc_details",
@@ -110,7 +109,7 @@ print(f"Loaded {len(hist_pdf):,} rows from {HIST_TABLE}.")
 # MAGIC ## 3 · Reference BOM & benchmark index (derived from Phase 1)
 # MAGIC
 # MAGIC The value of this system is that recommendations are grounded in **Kauvery's own history**, not a model's general knowledge.
-# MAGIC From the historical catalog we derive, per equipment category:
+# MAGIC From your historical catalog we derive:
 # MAGIC
 # MAGIC - a **benchmark index** (most-recent comparable price, typical warranty, AMC/FOC rates, purchase frequency), honoring the
 # MAGIC   business rules: exclude `unit_rate` NULL/0, and use the **most-recent comparable** purchase as the primary benchmark;
@@ -144,44 +143,33 @@ def _bench_record(g):
         "model_no": recent["model_no"],
     }
 
-benchmark_index = {"by_model": {}, "by_brand_category": {}, "by_category": {}, "freq_norm": 8.0}
+# No equipment categories (the customer's data has none) — benchmark by model_no, then make_brand,
+# then all-history.
+benchmark_index = {"by_model": {}, "by_brand": {}, "freq_norm": 8.0}
 for model, g in hd.groupby(hd["model_no"].str.lower()):
     benchmark_index["by_model"][model] = _bench_record(g)
-for (brand, cat), g in hd.groupby([hd["make_brand"].str.lower(), "_category"]):
-    benchmark_index["by_brand_category"][f"{brand}|{cat}"] = _bench_record(g)
-for cat, g in hd.groupby("_category"):
-    rec = _bench_record(g)
-    rec["freq_max"] = int(g["po_number"].nunique())
-    benchmark_index["by_category"][cat] = rec
+for brand, g in hd.groupby(hd["make_brand"].str.lower()):
+    benchmark_index["by_brand"][brand] = _bench_record(g)
 
-# Reference BOM — single universal standard (category removed). What a complete purchase should
-# include; applied to every item. detect_gaps reads it via its "_default" fallback.
-reference_bom = {
-    "_default": {"min_warranty_months": 24, "requires": ["amc_camc", "training", "installation_commissioning"]},
-}
+# Reference BOM — one universal standard: what a complete purchase should include, applied to every item.
+reference_bom = {"min_warranty_months": 24, "requires": ["amc_camc", "training", "installation_commissioning"]}
 
-# Component examples — a real historical PO that included each component, for citations.
+# Component examples — a real historical PO that included each component, for gap citations.
 component_examples = {}
-for cat, g in hd.groupby("_category"):
-    ex = {}
-    amc_g = g[g["has_amc"]]
-    foc_g = g[g["has_foc"]]
-    warr_g = g[g["warranty_months"] >= 24]
-    train_g = g[g["special_instructions"].str.contains("training", case=False, na=False)]
-    inst_g = g[g["special_instructions"].str.contains("Installation", case=False, na=False)]
-    def pick(gg):
-        if len(gg) == 0: return None
+_groups = {
+    "amc_camc": hd[hd["has_amc"]], "foc_accessories": hd[hd["has_foc"]],
+    "warranty": hd[hd["warranty_months"] >= 24],
+    "training": hd[hd["special_instructions"].str.contains("training", case=False, na=False)],
+    "installation_commissioning": hd[hd["special_instructions"].str.contains("Installation", case=False, na=False)],
+}
+for key, gg in _groups.items():
+    if len(gg):
         r = gg.sort_values("po_date_dt").iloc[-1]
-        return {"po_number": r["po_number"], "unit_name": r["unit_name"], "po_date": r["po_date"],
-                "source_file_name": r["source_file_name"], "page": int(np.random.randint(2, 15))}
-    for key, gg in [("amc_camc", amc_g), ("foc_accessories", foc_g), ("warranty", warr_g),
-                    ("training", train_g), ("installation_commissioning", inst_g)]:
-        p = pick(gg)
-        if p: ex[key] = p
-    component_examples[cat] = ex
+        component_examples[key] = {"po_number": r["po_number"], "unit_name": r["unit_name"],
+                                   "po_date": r["po_date"], "source_file_name": r["source_file_name"],
+                                   "page": int(np.random.randint(2, 15))}
 
-print("benchmark categories:", list(benchmark_index["by_category"].keys()))
-print("example CT Scanner benchmark:", json.dumps(benchmark_index["by_category"].get("CT Scanner", {}), indent=2)[:400])
+print(f"benchmark index: {len(benchmark_index['by_model'])} models, {len(benchmark_index['by_brand'])} brands")
 
 # COMMAND ----------
 
@@ -247,12 +235,6 @@ MODEL_INPUT_COLS = ["item_description", "make_brand", "model_no", "qty", "unit_r
                     "has_training", "has_installation"]
 WEIGHTS = {"price": 50, "warranty": 30, "amc_camc": 8, "foc": 5, "delivery": 3, "frequency": 2, "payment": 2}
 
-# Category removed — the real data has no equipment-type column and the demo taxonomy did not fit
-# it. Benchmarks now match model_no -> make_brand -> all-history, and gap detection uses a single
-# universal Reference BOM. classify_category is kept as a constant so downstream lookups stay valid.
-def classify_category(text):
-    return "General"
-
 def _clip01(x):
     return float(max(0.0, min(1.0, x)))
 
@@ -289,19 +271,14 @@ def verdict_from_score(score):
 def find_benchmark(row, bench_index):
     model = str(row.get("model_no", "")).strip().lower()
     brand = str(row.get("make_brand", "")).strip().lower()
-    category = classify_category(" ".join([str(row.get("item_description", "")),
-                                            str(row.get("model_no", "")), str(row.get("make_brand", ""))]))
     if model and model in bench_index.get("by_model", {}):
-        return bench_index["by_model"][model], "Exact Match", category
-    bc = brand + "|" + category
-    if bc in bench_index.get("by_brand_category", {}):
-        return bench_index["by_brand_category"][bc], "Comparable Match", category
-    if category in bench_index.get("by_category", {}):
-        return bench_index["by_category"][category], "Category Match", category
-    return None, "No historical purchase found", category
+        return bench_index["by_model"][model], "Exact Match"
+    if brand and brand in bench_index.get("by_brand", {}):
+        return bench_index["by_brand"][brand], "Comparable Match"
+    return None, "No historical purchase found"
 
 def build_features(row, bench_index):
-    bench, match_level, category = find_benchmark(row, bench_index)
+    bench, match_level = find_benchmark(row, bench_index)
     unit_rate = float(row.get("unit_rate") or 0.0)
     warranty = float(row.get("warranty_months") or 0)
     amc = bool(row.get("amc_present")) or bool(row.get("camc_present"))
@@ -322,17 +299,15 @@ def build_features(row, bench_index):
              "foc_present": 1.0 if foc else 0.0,
              "hist_frequency_norm": float(freq_norm),
              "payment_terms_score": float(payment_terms_score(row.get("payment_terms", "")))}
-    info = {"category": category, "match_level": match_level, "benchmark_unit_rate": bench_rate,
+    info = {"match_level": match_level, "benchmark_unit_rate": bench_rate,
             "benchmark_model": (bench.get("model_no") if bench else None),
             "benchmark_po": (bench.get("recent_po_number") if bench else None),
             "benchmark_po_date": (bench.get("recent_po_date") if bench else None)}
     return feats, info
 
-_DEFAULT_BOM = {"min_warranty_months": 24, "requires": ["amc_camc", "training", "installation_commissioning"]}
-
-def detect_gaps(row, category, reference_bom, component_examples):
-    bom = reference_bom.get(category, reference_bom.get("_default", _DEFAULT_BOM))
-    ex = component_examples.get(category, {})
+def detect_gaps(row, reference_bom, component_examples):
+    bom = reference_bom
+    ex = component_examples
     def cite(component):
         c = ex.get(component)
         if not c:
@@ -345,8 +320,8 @@ def detect_gaps(row, category, reference_bom, component_examples):
     reqs = bom.get("requires", [])
     if warranty < bom.get("min_warranty_months", 24):
         gaps.append({"component": "Warranty", "severity": "High",
-                     "message": "Warranty %d months is below the expected %d months for %s."
-                                % (int(warranty), bom.get("min_warranty_months", 24), category),
+                     "message": "Warranty %d months is below the expected %d months."
+                                % (int(warranty), bom.get("min_warranty_months", 24)),
                      "citation": cite("warranty")})
     if "amc_camc" in reqs and not (bool(row.get("amc_present")) or bool(row.get("camc_present"))):
         gaps.append({"component": "AMC/CMC", "severity": "High",
@@ -379,14 +354,14 @@ class CapexWorthItModel(mlflow.pyfunc.PythonModel):
             feats, info = build_features(row, self._bench)
             X = pd.DataFrame([[feats[c] for c in FEATURE_COLS]], columns=FEATURE_COLS)
             score = float(max(0.0, min(100.0, self._model.predict(X)[0])))
-            gaps = detect_gaps(row, info["category"], self._bom, self._examples)
+            gaps = detect_gaps(row, self._bom, self._examples)
             verdict = verdict_from_score(score)
             # A cheap price shouldn't auto-Accept a quote that is missing essentials (warranty/AMC):
             # a High-severity gap means there is always something to negotiate first.
             if verdict == "Accept" and any(g.get("severity") == "High" for g in gaps):
                 verdict = "Negotiate"
             out.append({"item_description": row.get("item_description"), "make_brand": row.get("make_brand"),
-                        "model_no": row.get("model_no"), "category": info["category"],
+                        "model_no": row.get("model_no"),
                         "match_level": info["match_level"], "benchmark_unit_rate": info["benchmark_unit_rate"],
                         "benchmark_po": info["benchmark_po"], "benchmark_po_date": info["benchmark_po_date"],
                         "quoted_unit_rate": float(row.get("unit_rate") or 0.0),
@@ -474,7 +449,7 @@ with mlflow.start_run(run_name="capex_worth_it") as run:
     for _c in ["qty", "warranty_months", "delivery_lead_days"]:
         example[_c] = example[_c].astype(int)
     signature = infer_signature(example, pd.DataFrame([{
-        "item_description": "x", "make_brand": "x", "model_no": "x", "category": "x", "match_level": "x",
+        "item_description": "x", "make_brand": "x", "model_no": "x", "match_level": "x",
         "benchmark_unit_rate": 0.0, "benchmark_po": "x", "benchmark_po_date": "x", "quoted_unit_rate": 0.0,
         "price_variance_pct": 0.0, "worth_score": 0.0, "verdict": "x", "num_gaps": 0, "gaps_json": "x"}]))
     info = mlflow.pyfunc.log_model(
@@ -536,7 +511,7 @@ comp["quote_ref"] = quote["quote_ref"]
 comp["unit_name"] = quote["unit_name"]
 comp["vendor_name"] = quote["vendor_name"]
 
-comp_cols = ["quote_ref", "unit_name", "vendor_name", "item_description", "make_brand", "model_no", "category",
+comp_cols = ["quote_ref", "unit_name", "vendor_name", "item_description", "make_brand", "model_no",
              "match_level", "benchmark_unit_rate", "benchmark_po", "benchmark_po_date", "quoted_unit_rate",
              "price_variance_pct", "worth_score", "verdict", "num_gaps", "gaps_json", "scored_at"]
 comp_double = {"benchmark_unit_rate", "quoted_unit_rate", "price_variance_pct", "worth_score"}
