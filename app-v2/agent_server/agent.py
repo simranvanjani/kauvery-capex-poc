@@ -1,3 +1,4 @@
+import contextvars
 import json
 import logging
 import os
@@ -43,11 +44,23 @@ SCHEMA = os.getenv("SCHEMA", "gold")
 
 _WC: WorkspaceClient | None = None
 
+# On-behalf-of-user (OBO): the FastAPI routes set the signed-in user's forwarded token here per
+# request; every tool then acts AS THAT USER against the warehouse / serving endpoints / volumes.
+# Databricks enforces the app's declared user_api_scopes AND the user's own grants — so history,
+# scoring, and PDF parsing are governed per user rather than via a shared service principal.
+_USER_TOKEN: contextvars.ContextVar[str | None] = contextvars.ContextVar("user_token", default=None)
+
+
+def set_user_token(token: str | None) -> None:
+    _USER_TOKEN.set(token or None)
+
 
 def wc() -> WorkspaceClient:
-    """App service-principal client. Tool calls (FM parse, model endpoint, UC functions) run as the
-    SP so they don't depend on per-user grants; per-user isolation of history/feedback is handled by
-    the frontend/Node server + Lakebase auth."""
+    """User-scoped client when an OBO token is present (tools run as the signed-in user); otherwise
+    the app service principal (local dev / no forwarded token)."""
+    token = _USER_TOKEN.get()
+    if token:
+        return WorkspaceClient(token=token, auth_type="pat")
     global _WC
     if _WC is None:
         _WC = WorkspaceClient()

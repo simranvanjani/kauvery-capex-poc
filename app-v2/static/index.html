@@ -1,28 +1,28 @@
 <title>CAPEX Copilot</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-  /* Kauvery Hospital brand: magenta #ee2d68 · cyan #4dc6e1 · petrol #1d4354 */
+  /* Genie-style surface: Databricks blue #1B6FDA · sparkle gradient blue->teal · neutral canvas */
   :root{
-    --bg:#FAFAFA; --surface:#FFFFFF; --sidebar:#F4F4F5; --raise:#F7F7F8;
-    --ink:#131316; --ink-2:#3F3F46; --muted:#8A8A90; --line:#EAEAEC; --line-2:#DDDDE0;
-    --accent:#EE2D68; --accent-ink:#C41F57; --accent-weak:rgba(238,45,104,.09);
-    --cyan:#4DC6E1;
+    --bg:#F6F7F9; --surface:#FFFFFF; --sidebar:#FBFBFC; --raise:#F2F4F7;
+    --ink:#11171F; --ink-2:#3C4650; --muted:#7A8593; --line:#E7EAEE; --line-2:#D7DCE3;
+    --accent:#1B6FDA; --accent-ink:#155CB8; --accent-weak:rgba(27,111,218,.08);
+    --g1:#2272B4; --g2:#3BB6A6;   /* genie sparkle gradient */
     --accept:#1F8A70; --accept-bg:rgba(31,138,112,.10);
     --negotiate:#BE7C16; --negotiate-bg:rgba(190,124,22,.12);
     --reject:#C93A3A; --reject-bg:rgba(201,58,58,.10);
     --up:#1F8A70; --down:#C93A3A;
-    --radius:12px; --radius-sm:9px;
-    --ui:"Hanken Grotesk",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --radius:14px; --radius-sm:10px;
+    --ui:"DM Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
   }
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
-      --bg:#0A0A0B; --surface:#141416; --sidebar:#0E0E10; --raise:#1A1A1D;
-      --ink:#F3F3F4; --ink-2:#B6B6BC; --muted:#7C7C83; --line:#232327; --line-2:#2E2E33;
-      --accent:#FF477E; --accent-ink:#FF8AAD; --accent-weak:rgba(255,71,126,.14);
-      --cyan:#5FD1E8;
+      --bg:#0B0D10; --surface:#14181D; --sidebar:#0F1216; --raise:#1B2027;
+      --ink:#EEF1F4; --ink-2:#B4BCC6; --muted:#7C8794; --line:#222831; --line-2:#2D343E;
+      --accent:#5AA0F0; --accent-ink:#8FBEF6; --accent-weak:rgba(90,160,240,.14);
+      --g1:#3B8FD6; --g2:#48CBB9;
       --accept:#3FB795; --accept-bg:rgba(63,183,149,.15);
       --negotiate:#E0A94A; --negotiate-bg:rgba(224,169,74,.16);
       --reject:#E0736A; --reject-bg:rgba(224,115,106,.15);
@@ -30,10 +30,10 @@
     }
   }
   :root[data-theme="dark"]{
-    --bg:#0A0A0B; --surface:#141416; --sidebar:#0E0E10; --raise:#1A1A1D;
-    --ink:#F3F3F4; --ink-2:#B6B6BC; --muted:#7C7C83; --line:#232327; --line-2:#2E2E33;
-    --accent:#FF477E; --accent-ink:#FF8AAD; --accent-weak:rgba(255,71,126,.14);
-    --cyan:#5FD1E8;
+    --bg:#0B0D10; --surface:#14181D; --sidebar:#0F1216; --raise:#1B2027;
+    --ink:#EEF1F4; --ink-2:#B4BCC6; --muted:#7C8794; --line:#222831; --line-2:#2D343E;
+    --accent:#5AA0F0; --accent-ink:#8FBEF6; --accent-weak:rgba(90,160,240,.14);
+    --g1:#3B8FD6; --g2:#48CBB9;
     --accept:#3FB795; --accept-bg:rgba(63,183,149,.15);
     --negotiate:#E0A94A; --negotiate-bg:rgba(224,169,74,.16);
     --reject:#E0736A; --reject-bg:rgba(224,115,106,.15);
@@ -48,23 +48,27 @@
   button{font-family:inherit;cursor:pointer}
   :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
 
-  .app{display:grid;grid-template-columns:250px 1fr;height:100%}
+  .app{display:grid;grid-template-columns:264px 1fr;height:100%}
 
-  /* sidebar — flat, minimal */
+  /* sparkle mark (Genie) */
+  .spark{border-radius:8px;flex:none;display:grid;place-items:center;color:#fff;
+    background:linear-gradient(135deg,var(--g1),var(--g2))}
+  .spark svg{width:60%;height:60%}
+
+  /* sidebar */
   .sidebar{background:var(--sidebar);border-right:1px solid var(--line);
     display:flex;flex-direction:column;min-height:0;padding:16px 12px;gap:4px}
   .brand{display:flex;align-items:center;gap:10px;padding:4px 8px 16px}
-  .brand .mark{width:26px;height:26px;border-radius:7px;flex:none;display:grid;place-items:center;
-    background:var(--accent);color:#fff;font-weight:700;font-size:14px}
+  .brand .spark{width:30px;height:30px}
   .brand .name{font-weight:700;font-size:16px;letter-spacing:-.01em}
   .brand .sub{font-size:11px;color:var(--muted)}
-  .newbtn{display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;border-radius:var(--radius-sm);
+  .newbtn{display:flex;align-items:center;gap:8px;width:100%;padding:10px 12px;border-radius:var(--radius-sm);
     border:1px solid var(--line-2);background:var(--surface);color:var(--ink);font-weight:600;font-size:13.5px}
   .newbtn:hover{border-color:var(--accent);color:var(--accent-ink)}
   .nav-label{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
     padding:16px 10px 6px;font-weight:600}
   .histlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px;overflow-y:auto;min-height:0}
-  .histlist a{display:block;padding:7px 10px;border-radius:7px;color:var(--ink-2);text-decoration:none;
+  .histlist a{display:block;padding:8px 10px;border-radius:8px;color:var(--ink-2);text-decoration:none;
     font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .histlist a:hover{background:var(--surface)}
   .histlist a.active{background:var(--accent-weak);color:var(--accent-ink);font-weight:600}
@@ -74,61 +78,65 @@
   .side-foot .who{font-size:12.5px;font-weight:600;line-height:1.2}
   .side-foot .role{font-size:11px;color:var(--muted)}
 
+  /* main = header + scrollable messages + bottom-pinned composer */
   .main{display:flex;flex-direction:column;min-width:0;min-height:0}
-  .topbar{display:flex;align-items:center;gap:12px;padding:14px 26px;border-bottom:1px solid var(--line)}
-  .topbar h1{font-weight:700;font-size:16px;margin:0;letter-spacing:-.01em}
+  .topbar{display:flex;align-items:center;gap:10px;padding:13px 26px;border-bottom:1px solid var(--line)}
+  .topbar .spark{width:22px;height:22px}
+  .topbar h1{font-weight:700;font-size:15px;margin:0;letter-spacing:-.01em}
   .topbar .ctx{font-size:12.5px;color:var(--muted)}
-  .seg{margin-left:auto;display:inline-flex;gap:2px}
-  .seg button{border:none;background:transparent;color:var(--muted);font-weight:600;font-size:13px;
-    padding:6px 12px;border-radius:7px;display:flex;align-items:center;gap:7px}
-  .seg button:hover{color:var(--ink)}
-  .seg button.on{background:var(--accent-weak);color:var(--accent-ink)}
-  .adminflag{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 
-  .view{flex:1;min-height:0;overflow-y:auto}
+  .view{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column}
 
-  /* chat — airy, no heavy cards */
-  .thread{max-width:760px;margin:0 auto;padding:30px 26px 8px}
-  .turn{padding:8px 0 20px}
-  .turn .role-tag{font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-weight:700;
-    color:var(--muted);margin-bottom:8px}
-  .turn.bot .role-tag{color:var(--accent-ink)}
+  .thread{width:100%;max-width:800px;margin:0 auto;padding:26px 26px 10px;flex:1;
+    display:flex;flex-direction:column}
+
+  /* empty state — centered greeting + suggestion cards (Genie welcome) */
+  .welcome{margin:auto 0;text-align:center;padding:12px 0 24px}
+  .welcome .hero{width:56px;height:56px;border-radius:16px;margin:0 auto 18px}
+  .welcome h2{font-size:24px;font-weight:700;letter-spacing:-.02em;margin:0 0 8px}
+  .welcome p{color:var(--ink-2);max-width:520px;margin:0 auto 26px;font-size:14.5px}
+  .suggest{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:600px;margin:0 auto;text-align:left}
+  .scard{border:1px solid var(--line-2);background:var(--surface);border-radius:12px;padding:14px 15px;
+    color:var(--ink);display:flex;gap:11px;align-items:flex-start;transition:border-color .12s,transform .12s}
+  .scard:hover{border-color:var(--accent);transform:translateY(-1px)}
+  .scard .ic{color:var(--accent);flex:none;margin-top:1px}
+  .scard .ic svg{width:17px;height:17px;display:block}
+  .scard .t{font-size:13.5px;font-weight:600;line-height:1.35}
+  .scard .d{font-size:12px;color:var(--muted);margin-top:3px;font-weight:400}
+
+  /* turns */
+  .turn{padding:6px 0 22px;display:flex;gap:12px}
+  .turn .ava{width:26px;height:26px;flex:none;border-radius:7px}
+  .turn.user .ava{background:var(--accent-weak);color:var(--accent-ink);display:grid;place-items:center;
+    font-weight:700;font-size:10.5px}
+  .turn .body-wrap{min-width:0;flex:1}
+  .turn .role-tag{font-size:11px;letter-spacing:.05em;text-transform:uppercase;font-weight:700;
+    color:var(--muted);margin-bottom:6px}
+  .turn.bot .role-tag{color:var(--ink-2)}
   .turn.user p{margin:0}
   .filechip{display:inline-flex;align-items:center;gap:8px;margin-top:10px;padding:7px 12px;border-radius:9px;
     background:var(--surface);border:1px solid var(--line-2);font-size:13px}
   .filechip .fx{font-size:11px;font-family:var(--mono);color:var(--accent-ink);font-weight:600}
-  .lead{margin:.2rem 0 18px;color:var(--ink-2)}
+  .lead{color:var(--ink-2)}
+  .botbody p{margin:8px 0}
+  .botbody h4{margin:14px 0 6px}
+  .botbody code{font-family:var(--mono);font-size:12.5px;background:var(--raise);padding:1px 5px;border-radius:5px}
 
-  /* review — one hairline container, sections divided by rules (minimal) */
+  /* review card (used if the agent returns structured HTML) */
   .review{border:1px solid var(--line-2);border-radius:var(--radius);background:var(--surface);overflow:hidden}
   .review-head{display:flex;align-items:center;gap:12px;padding:16px 18px 14px}
   .review-head .item{font-weight:700;font-size:15px}
-  .review-head .qp{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:3px}
   .verdict{margin-left:auto;display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:12.5px;
     padding:5px 12px;border-radius:999px;white-space:nowrap}
   .verdict.negotiate{color:var(--negotiate);background:var(--negotiate-bg)}
-  .verdict .score{font-family:var(--mono);font-weight:500;opacity:.85}
   .rsec{padding:16px 18px;border-top:1px solid var(--line)}
-  .rsec h4{margin:0 0 10px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:700}
-  .fair{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
-  .fair .big{font-family:var(--mono);font-size:20px;font-weight:500;color:var(--negotiate)}
-  .fair .cmp{font-size:13px;color:var(--ink-2)}
   .gaps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:11px}
-  .gaps li{display:flex;gap:10px;align-items:flex-start;font-size:13.5px}
-  .sev{flex:none;margin-top:2px;font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
-    padding:2px 7px;border-radius:5px}
-  .sev.high{color:var(--reject);background:var(--reject-bg)} .sev.med{color:var(--negotiate);background:var(--negotiate-bg)}
-  .gaps .cite{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
-  .tablewrap{overflow-x:auto}
+  .tablewrap{overflow-x:auto;margin:6px 0}
   table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:520px}
   th,td{text-align:left;padding:8px 12px 8px 0;border-bottom:1px solid var(--line);white-space:nowrap}
   th{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:700}
   tbody tr:last-child td{border-bottom:none}
   td.num,th.num{text-align:right;font-family:var(--mono);padding-right:14px}
-  tr.best td{color:var(--accept)}
-  .tag-best{font-size:9px;font-weight:700;color:var(--accept);border:1px solid var(--accept);border-radius:4px;padding:1px 5px;margin-left:6px}
-  .rec{font-size:13.5px;color:var(--ink);line-height:1.6}
-  .rec b{color:var(--accent-ink)}
 
   .msg-actions{display:flex;align-items:center;gap:2px;margin-top:14px}
   .fb-label{font-size:12px;color:var(--muted);margin-right:6px}
@@ -137,94 +145,41 @@
   .iconbtn:hover{background:var(--raise);color:var(--ink)}
   .iconbtn.up.sel{color:var(--up);background:var(--accept-bg)}
   .iconbtn.down.sel{color:var(--down);background:var(--reject-bg)}
-  .iconbtn.sel-copy{color:var(--accept)}
   .iconbtn svg{width:15px;height:15px}
 
-  /* bad-feedback comment box */
-  .fb-note{margin-top:10px;max-width:520px;border:1px solid var(--line-2);border-radius:10px;
-    background:var(--surface);padding:12px 13px}
-  .fb-note label{display:block;font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:7px}
-  .fb-note textarea{width:100%;border:1px solid var(--line-2);border-radius:8px;background:var(--raise);
-    color:var(--ink);font-family:inherit;font-size:13px;padding:8px 10px;resize:none;line-height:1.45}
-  .fb-note textarea:focus{outline:none;border-color:var(--accent)}
-  .fb-note-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:9px}
-  .fb-cancel{border:none;background:transparent;color:var(--muted);font-size:12.5px;font-weight:600;padding:6px 10px;border-radius:7px}
-  .fb-cancel:hover{color:var(--ink)}
-  .fb-submit{border:none;background:var(--accent);color:#fff;font-size:12.5px;font-weight:600;padding:6px 14px;border-radius:7px}
-  .fb-submit:hover{background:var(--accent-ink)}
-
-  /* composer — slim, single line, light */
-  .composer-wrap{padding:12px 26px calc(14px + env(safe-area-inset-bottom,0px));
-    background:linear-gradient(180deg,transparent,var(--bg) 40%)}
-  .composer{max-width:760px;margin:0 auto;background:var(--surface);border:1px solid var(--line-2);
-    border-radius:12px;padding:4px 6px 4px 4px;display:flex;align-items:center;gap:4px}
-  .composer:focus-within{border-color:var(--accent)}
-  .attach{width:34px;height:34px;border-radius:8px;border:none;background:transparent;color:var(--muted);
+  /* composer — pinned at the bottom (Genie) */
+  .composer-wrap{padding:12px 26px calc(16px + env(safe-area-inset-bottom,0px));
+    background:linear-gradient(180deg,transparent,var(--bg) 45%)}
+  .composer{max-width:800px;margin:0 auto;background:var(--surface);border:1px solid var(--line-2);
+    border-radius:16px;padding:5px 6px 5px 5px;display:flex;align-items:flex-end;gap:4px;
+    box-shadow:0 1px 2px rgba(16,24,40,.04)}
+  .composer:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-weak)}
+  .attach{width:36px;height:36px;border-radius:9px;border:none;background:transparent;color:var(--muted);
     display:grid;place-items:center;flex:none}
   .attach:hover{color:var(--accent)}
-  .composer textarea{flex:1;border:none;background:transparent;resize:none;color:var(--ink);font-size:14px;
-    font-family:inherit;padding:9px 2px;max-height:120px;line-height:1.4;overflow-y:auto}
+  .composer textarea{flex:1;border:none;background:transparent;resize:none;color:var(--ink);font-size:14.5px;
+    font-family:inherit;padding:9px 2px;max-height:140px;line-height:1.45;overflow-y:auto}
   .composer textarea::placeholder{color:var(--muted)}
-  .send{width:34px;height:34px;border-radius:8px;border:none;background:var(--accent);color:#fff;
-    display:grid;place-items:center;flex:none}
-  .send:hover{background:var(--accent-ink)}
-  .hint{max-width:760px;margin:8px auto 0;font-size:11.5px;color:var(--muted);text-align:center}
-
-  /* monitor */
-  .monitor{max-width:1020px;margin:0 auto;padding:28px 26px}
-  .mon-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
-  .mon-head h2{font-weight:700;font-size:20px;margin:0;letter-spacing:-.01em}
-  .mon-head p{margin:4px 0 0;color:var(--muted);font-size:13px}
-  .range{display:inline-flex;gap:2px}
-  .range button{border:none;background:transparent;color:var(--muted);font-size:12.5px;font-weight:600;padding:5px 11px;border-radius:7px}
-  .range button.on{background:var(--accent-weak);color:var(--accent-ink)}
-  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin:22px 0 26px;
-    background:var(--line);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
-  .tile{background:var(--surface);padding:16px 18px}
-  .tile .k{font-size:11.5px;color:var(--muted);font-weight:600}
-  .tile .v{font-family:var(--mono);font-size:26px;font-weight:500;margin-top:8px;letter-spacing:-.01em}
-  .tile .d{font-size:11.5px;margin-top:4px;color:var(--muted)}
-  .tile .d.pos{color:var(--accept)} .tile .d.neg{color:var(--reject)}
-
-  .split{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-bottom:26px}
-  .block h3{margin:0 0 14px;font-size:13px;font-weight:700}
-  .barlabel{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:7px;color:var(--ink-2)}
-  .barlabel .muted{color:var(--muted);font-family:var(--mono)}
-  .bar{height:8px;border-radius:5px;background:var(--line);overflow:hidden;display:flex;gap:2px}
-  .bar span{display:block;height:100%}
-  .legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px;font-size:12px;color:var(--ink-2)}
-  .legend i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px;vertical-align:0}
-
-  .block-title{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
-  .block-title h3{margin:0}
-  .block-title .meta{font-size:12px;color:var(--muted)}
-  .fb{display:inline-flex;align-items:center;gap:5px;font-weight:600;font-size:12px}
-  .fb.up{color:var(--up)} .fb.down{color:var(--down)} .fb.none{color:var(--muted);font-weight:400}
-  .vpill{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px}
-  .vpill.accept{color:var(--accept);background:var(--accept-bg)}
-  .vpill.negotiate{color:var(--negotiate);background:var(--negotiate-bg)}
-  .vpill.reject{color:var(--reject);background:var(--reject-bg)}
-  .montable td{padding:11px 14px 11px 0;vertical-align:top}
-  .montable .q{color:var(--ink);font-weight:500}
-  .montable .u{color:var(--muted);font-size:12px}
-
-  .ribbon{font-size:11px;color:var(--muted);text-align:center;padding:10px;border-top:1px solid var(--line)}
+  .send{width:36px;height:36px;border-radius:10px;border:none;color:#fff;display:grid;place-items:center;flex:none;
+    background:linear-gradient(135deg,var(--g1),var(--g2))}
+  .send:hover{filter:brightness(1.05)}
+  .hint{max-width:800px;margin:9px auto 0;font-size:11.5px;color:var(--muted);text-align:center}
 
   @media (max-width:820px){
     .app{grid-template-columns:1fr}.sidebar{display:none}
-    .tiles{grid-template-columns:repeat(2,1fr)}.split{grid-template-columns:1fr;gap:22px}
+    .suggest{grid-template-columns:1fr}
   }
 </style>
 
 <div class="app">
   <aside class="sidebar">
     <div class="brand">
-      <div class="mark">K</div>
+      <div class="spark"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.9 5.7a4 4 0 0 0 2.4 2.4L22 12l-5.7 1.9a4 4 0 0 0-2.4 2.4L12 22l-1.9-5.7a4 4 0 0 0-2.4-2.4L2 12l5.7-1.9a4 4 0 0 0 2.4-2.4L12 2z"/></svg></div>
       <div><div class="name">CAPEX&nbsp;Copilot</div><div class="sub">Kauvery Hospital</div></div>
     </div>
     <button class="newbtn">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-      New review
+      New chat
     </button>
     <div class="nav-label">Recent</div>
     <nav class="histlist" id="histList"></nav>
@@ -236,17 +191,36 @@
 
   <div class="main">
     <div class="topbar">
+      <div class="spark"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.9 5.7a4 4 0 0 0 2.4 2.4L22 12l-5.7 1.9a4 4 0 0 0-2.4 2.4L12 22l-1.9-5.7a4 4 0 0 0-2.4-2.4L2 12l5.7-1.9a4 4 0 0 0 2.4-2.4L12 2z"/></svg></div>
       <h1 id="viewTitle">CAPEX Copilot</h1>
       <span class="ctx" id="viewCtx">Quotation review</span>
     </div>
 
-    <!-- CHAT -->
     <section class="view" id="chatView">
       <div class="thread">
-        <div class="turn bot" id="welcome">
-          <div class="role-tag">CAPEX Copilot</div>
-          <p class="lead">Attach a quotation PDF, or paste the quote as text, and I'll review it against Kauvery's
-            purchase history — price fairness, gaps, a cross-site comparison, and a negotiation recommendation.</p>
+        <div class="welcome" id="welcome">
+          <div class="spark hero"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.9 5.7a4 4 0 0 0 2.4 2.4L22 12l-5.7 1.9a4 4 0 0 0-2.4 2.4L12 22l-1.9-5.7a4 4 0 0 0-2.4-2.4L2 12l5.7-1.9a4 4 0 0 0 2.4-2.4L12 2z"/></svg></div>
+          <h2 id="greet">Hi — I'm your CAPEX assistant</h2>
+          <p>Attach a quotation PDF or ask in plain language. I'll review it against Kauvery's own
+             purchase history — price fairness, gaps, a cross-site comparison, and a negotiation ask.</p>
+          <div class="suggest">
+            <button class="scard" onclick="suggest('Review a quotation')">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+              <span><span class="t">Review a quotation</span><span class="d">Attach a PDF to auto-review it</span></span>
+            </button>
+            <button class="scard" onclick="suggest('What did we last pay for a patient monitor, across all units?')">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 5-5"/></svg></span>
+              <span><span class="t">Last price paid</span><span class="d">"…for a patient monitor, all units"</span></span>
+            </button>
+            <button class="scard" onclick="suggest('Which vendor gives the best value for syringe pumps?')">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-9M14 17H5M17 3l3 4-3 4M7 21l-3-4 3-4"/></svg></span>
+              <span><span class="t">Best vendor</span><span class="d">"…best value for syringe pumps"</span></span>
+            </button>
+            <button class="scard" onclick="suggest('Compare ventilator prices across our units')">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 12h16M4 19h10"/></svg></span>
+              <span><span class="t">Cross-site history</span><span class="d">"Compare ventilator prices"</span></span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -268,51 +242,11 @@
 </div>
 
 <script>
-  function fb(btn, kind){
-    const row = btn.parentElement;
-    row.querySelectorAll('.iconbtn.up, .iconbtn.down').forEach(b => b.classList.remove('sel'));
-    btn.classList.add('sel');
-    const label = row.querySelector('.fb-label');
-    const note = document.getElementById('fbNote');
-    if (kind === 'down'){
-      if (label) label.textContent = 'Sorry about that —';
-      note.hidden = false;
-      note.querySelector('textarea').focus();
-    } else {
-      if (label) label.textContent = 'Logged as helpful';
-      note.hidden = true;
-    }
-  }
   const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
-  function copyReview(btn){
-    const review = document.querySelector('.review');
-    const text = review ? review.innerText.replace(/\n{3,}/g, '\n\n').trim() : '';
-    const done = () => {
-      const orig = btn.innerHTML; btn.innerHTML = CHECK; btn.classList.add('sel-copy'); btn.title = 'Copied';
-      setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('sel-copy'); btn.title = 'Copy review'; }, 1400);
-    };
-    if (navigator.clipboard && window.isSecureContext){
-      navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
-    } else {
-      fallbackCopy(text, done);
-    }
-  }
-  function fallbackCopy(text, done){
-    const t = document.createElement('textarea');
-    t.value = text; t.style.position = 'fixed'; t.style.opacity = '0';
-    document.body.appendChild(t); t.focus(); t.select();
-    try { document.execCommand('copy'); done(); } catch (e) { /* clipboard blocked */ }
-    document.body.removeChild(t);
-  }
-  function closeFbNote(){ document.getElementById('fbNote').hidden = true; }
-  function submitFbNote(){
-    const note = document.getElementById('fbNote');
-    const label = document.querySelector('.fb-label');
-    note.hidden = true;
-    if (label) label.textContent = 'Thanks — feedback sent to the team';
-  }
+  const SPARK = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.9 5.7a4 4 0 0 0 2.4 2.4L22 12l-5.7 1.9a4 4 0 0 0-2.4 2.4L12 22l-1.9-5.7a4 4 0 0 0-2.4-2.4L2 12l5.7-1.9a4 4 0 0 0 2.4-2.4L12 2z"/></svg>';
+
   const ta = document.querySelector('.composer textarea');
-  if (ta) ta.addEventListener('input', () => { ta.style.height='auto'; ta.style.height=Math.min(ta.scrollHeight,120)+'px'; });
+  if (ta) ta.addEventListener('input', () => { ta.style.height='auto'; ta.style.height=Math.min(ta.scrollHeight,140)+'px'; });
 
   /* ============ LIVE WIRING: chat + PDF review ============ */
   const SESSION_ID = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
@@ -341,7 +275,7 @@
         continue;
       }
       let m;
-      if((m=ln.match(/^(#{1,4})\s+(.*)$/))){ out.push('<h4 style="margin:14px 0 6px">'+inline(m[2])+'</h4>'); i++; continue; }
+      if((m=ln.match(/^(#{1,4})\s+(.*)$/))){ out.push('<h4>'+inline(m[2])+'</h4>'); i++; continue; }
       if(/^\s*[-*]\s+/.test(ln)){
         let items=[]; while(i<lines.length && /^\s*[-*]\s+/.test(lines[i])){ items.push('<li>'+inline(lines[i].replace(/^\s*[-*]\s+/,''))+'</li>'); i++; }
         out.push('<ul style="margin:6px 0;padding-left:18px">'+items.join('')+'</ul>'); continue;
@@ -351,7 +285,7 @@
       // stray line starting with * - # | that matched no block rule above — otherwise infinite loop)
       let para=[ln]; i++;
       while(i<lines.length && lines[i].trim()!=='' && !/^\s*[-*#|]/.test(lines[i])){ para.push(lines[i]); i++; }
-      out.push('<p style="margin:8px 0">'+inline(para.join(' '))+'</p>');
+      out.push('<p>'+inline(para.join(' '))+'</p>');
     }
     return out.join('');
   }
@@ -363,18 +297,19 @@
       <button class="iconbtn down" aria-label="Not helpful" onclick="fb(this,'down')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V3M22 12V5a2 2 0 0 0-2-2H6.7a2 2 0 0 0-2 1.7l-1.1 7A2 2 0 0 0 5.6 14H10v4a2 2 0 0 0 2 2l3-7"/></svg></button>
     </div>`;
 
-  function clearMock(){ if(mockCleared) return; thread.innerHTML=''; mockCleared=true; }
+  function clearMock(){ if(mockCleared) return; thread.innerHTML=''; thread.style.display='block'; mockCleared=true; }
 
   function addUser(text, chipName){
     clearMock();
     const el=document.createElement('div'); el.className='turn user';
-    el.innerHTML='<div class="role-tag">You</div><p>'+esc(text||'')+'</p>'+
-      (chipName?('<div class="filechip"><span class="fx">PDF</span> '+esc(chipName)+'</div>'):'');
+    el.innerHTML='<div class="ava">You</div><div class="body-wrap"><div class="role-tag">You</div><p>'+esc(text||'')+'</p>'+
+      (chipName?('<div class="filechip"><span class="fx">PDF</span> '+esc(chipName)+'</div>'):'')+'</div>';
     thread.appendChild(el); scroll();
   }
   function addBot(html){
     const el=document.createElement('div'); el.className='turn bot';
-    el.innerHTML='<div class="role-tag">CAPEX Copilot</div><div class="botbody">'+html+'</div>'+FB_ACTIONS;
+    el.innerHTML='<div class="ava spark">'+SPARK+'</div><div class="body-wrap"><div class="role-tag">CAPEX Copilot</div>'+
+      '<div class="botbody">'+html+'</div>'+FB_ACTIONS+'</div>';
     thread.appendChild(el); scroll(); return el.querySelector('.botbody');
   }
   function scroll(){ const v=document.getElementById('chatView'); if(v) v.scrollTop=v.scrollHeight; }
@@ -393,6 +328,12 @@
     }catch(e){ body.innerHTML='<p style="color:var(--reject)">Error: '+esc(String(e))+'</p>'; }
     scroll();
   }
+
+  // suggestion cards
+  window.suggest = function(text){
+    if(text === 'Review a quotation'){ fileInput.click(); return; }
+    addUser(text); ask(text);
+  };
 
   function submitComposer(){
     const t=(ta.value||'').trim(); if(!t) return;
@@ -413,7 +354,7 @@
   fileInput.addEventListener('change', async ()=>{
     const f=fileInput.files[0]; if(!f) return;
     addUser('Please review this quotation.', f.name);
-    const body = addBot('<p class="lead" style="color:var(--muted)">Uploading & reviewing…</p>');
+    const body = addBot('<p class="lead" style="color:var(--muted)">Uploading &amp; reviewing…</p>');
     try{
       const up=await fetch('/api/upload',{method:'POST',headers:{'X-Filename':f.name,'Content-Type':'application/octet-stream'},body:f}); const uj=await up.json();
       if(!uj.volume_path) throw new Error(uj.error||'upload failed');
@@ -427,7 +368,7 @@
     fileInput.value=''; scroll();
   });
 
-  // new review resets the thread
+  // new chat resets the thread
   const newBtn=document.querySelector('.newbtn');
   if(newBtn) newBtn.addEventListener('click',()=>{ convo.length=0; mockCleared=false; location.reload(); });
 
@@ -452,7 +393,7 @@
       const s = (d && d.sessions) || [];
       histList.innerHTML = s.length
         ? s.map(x=>'<a href="#" data-sid="'+esc(x.session_id)+'">'+esc(x.title||'Review')+'</a>').join('')
-        : '<a href="#" style="color:var(--muted);pointer-events:none">No reviews yet</a>';
+        : '<a href="#" style="color:var(--muted);pointer-events:none">No chats yet</a>';
       histList.querySelectorAll('a[data-sid]').forEach(a=>a.addEventListener('click', e=>{ e.preventDefault(); loadSession(a.dataset.sid, a); }));
     }).catch(()=>{});
   }
@@ -474,5 +415,7 @@
     if(!me) return;
     const av=document.querySelector('.side-foot .avatar'); if(av&&me.initials) av.textContent=me.initials;
     const who=document.querySelector('.side-foot .who'); if(who&&me.name) who.textContent=me.name;
+    const greet=document.getElementById('greet');
+    if(greet&&me.name){ greet.textContent='Hi '+me.name.split(' ')[0]+" — I'm your CAPEX assistant"; }
   }).catch(()=>{});
 </script>

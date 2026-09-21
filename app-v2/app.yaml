@@ -1,6 +1,19 @@
 command: ["uv", "run", "start-server"]
 # databricks apps listen on port 8000; start-server serves our custom UI + /api + the agent.
 
+# On-behalf-of-user (OBO): the app forwards the signed-in user's token (x-forwarded-access-token)
+# and the agent's tools act AS THAT USER. These are the scopes the app may request; Databricks still
+# enforces the user's own grants on the warehouse / endpoints / volumes.
+#   sql                        -> warehouse SQL (history UC functions + ai_query PDF parse)
+#   serving.serving-endpoints  -> scoring model (capex-worth-it) + FM extract/chat endpoints
+#   files.files                -> upload the quotation PDF to the UC Volume
+#   iam.current-user:read      -> resolve the signed-in user for history isolation
+user_api_scopes:
+  - sql
+  - serving.serving-endpoints
+  - files.files
+  - iam.current-user:read
+
 env:
   - name: MLFLOW_TRACKING_URI
     value: "databricks"
@@ -26,4 +39,4 @@ env:
   # Lakebase schema the app SP creates & OWNS on startup. Fresh name avoids the user-owned 'capex'
   # test schema (SP has CAN_CONNECT_AND_CREATE; it can only use schemas it created).
   - name: LAKEBASE_SCHEMA
-    value: "capex_app"
+    value: "capex_hist"

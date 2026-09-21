@@ -7,55 +7,69 @@ variables:
     description: SQL warehouse id used for UC-function calls + ai_query PDF parsing
     default: ""            # TODO: set your SQL warehouse id
   experiment_id:
-    description: MLflow experiment id for agent tracing (the monitor reads this)
+    description: MLflow experiment id for agent tracing
     default: ""            # TODO: set after `databricks experiments create` (or let quickstart create one)
   catalog:
     default: kauvey_poc
   schema:
     default: gold
+  chat_model:
+    description: Conversational FM endpoint (agent brain). Must exist in the target workspace.
+    default: databricks-claude-sonnet-4-5
+  extract_model:
+    description: PDF-extraction FM endpoint. ai_query needs responseFormat=json_object (Claude does
+      NOT support it) -> use a Llama/GPT endpoint that EXISTS in the target workspace.
+    default: databricks-llama-4-maverick
 
 resources:
   apps:
     capex_copilot:
-      name: "capex-copilot"
-      description: "Kauvery CAPEX Copilot — quotation review assistant with history, feedback, and admin monitor"
+      name: "capex-quote-review"
+      description: "Kauvery CAPEX Copilot — quotation review assistant (OBO, per-user history & feedback)"
       source_code_path: ./
+
+      # On-behalf-of-user: the app forwards the signed-in user's token and the agent's tools act as
+      # that user. Databricks enforces both these scopes AND the user's own grants.
+      user_api_scopes:
+        - sql
+        - serving.serving-endpoints
+        - files.files
+        - iam.current-user:read
+
       config:
-        command: ["uv", "run", "start-app"]
+        command: ["uv", "run", "start-server"]
         env:
           - name: MLFLOW_TRACKING_URI
             value: "databricks"
           - name: MLFLOW_REGISTRY_URI
             value: "databricks-uc"
-          - name: API_PROXY
-            value: "http://localhost:8000/invocations"
-          - name: CHAT_APP_PORT
-            value: "3000"
           - name: CHAT_PROXY_TIMEOUT_SECONDS
             value: "300"
-          - name: MLFLOW_EXPERIMENT_ID
-            value_from: "experiment"
           # ---- CAPEX config ----
           - name: CATALOG
             value: ${var.catalog}
           - name: SCHEMA
             value: ${var.schema}
-          - name: CHAT_MODEL                     # swap to a Claude / GPT endpoint to change the FM
-            value: "databricks-llama-4-maverick"
-          - name: MODEL_ENDPOINT
+          - name: CHAT_MODEL                     # conversational FM (agent brain)
+            value: ${var.chat_model}
+          - name: EXTRACT_MODEL                  # PDF extraction (needs json_object responseFormat)
+            value: ${var.extract_model}
+          - name: MODEL_ENDPOINT                 # custom scikit-learn scorer
             value: "capex-worth-it"
+          - name: LAKEBASE_SCHEMA
+            value: "capex_hist"
           - name: DATABRICKS_WAREHOUSE_ID
             value_from: "sql-warehouse"
 
       # Resources the app's service principal is granted on deploy (create-or-update).
       resources:
-        - name: "experiment"
-          experiment:
-            experiment_id: ${var.experiment_id}
-            permission: "CAN_MANAGE"
         - name: "chat-llm"                       # conversational FM
           serving_endpoint:
-            name: "databricks-llama-4-maverick"
+            name: ${var.chat_model}
+            permission: "CAN_QUERY"
+        - name: "extract-llm"                    # PDF-extraction FM
+          serving_endpoint:
+            name: ${var.extract_model}
             permission: "CAN_QUERY"
         - name: "model-endpoint"                 # custom scikit-learn scorer
           serving_endpoint:
@@ -81,4 +95,4 @@ targets:
     resources:
       apps:
         capex_copilot:
-          name: capex-copilot
+          name: capex-quote-review

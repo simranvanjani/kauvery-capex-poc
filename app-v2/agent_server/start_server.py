@@ -54,13 +54,23 @@ def _user_email(request: Request) -> str:
     h = request.headers
     return h.get("x-forwarded-email") or h.get("x-forwarded-preferred-username") or "local@dev"
 
+
+def _user_token(request: Request) -> str | None:
+    """OBO token forwarded by the Databricks Apps proxy for the signed-in user."""
+    return request.headers.get("x-forwarded-access-token")
+
+
 _wc = None
 
 
-def _w():
+def _w(token: str | None = None):
+    """User-scoped client when an OBO token is given (uploads land as the signed-in user); the SP
+    otherwise (local dev / identity lookup with no forwarded token)."""
+    from databricks.sdk import WorkspaceClient
+    if token:
+        return WorkspaceClient(token=token, auth_type="pat")
     global _wc
     if _wc is None:
-        from databricks.sdk import WorkspaceClient
         _wc = WorkspaceClient()
     return _wc
 
@@ -94,6 +104,9 @@ async def _chat(request: Request):
         messages = [{"role": "user", "content": payload["message"]}]
     session_id = payload.get("session_id") or uuid.uuid4().hex
     email = _user_email(request)
+    # OBO: run the agent's tools (warehouse SQL, scoring endpoint, PDF parse) as the signed-in user.
+    from agent_server.agent import set_user_token
+    set_user_token(_user_token(request))
     user_text = next((m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), "")
     msgs = normalize_history_items(messages)
     try:
@@ -122,7 +135,7 @@ async def _upload(request: Request):
     ext = ("." + fname.rsplit(".", 1)[-1]) if "." in fname else ".pdf"
     path = f"/Volumes/{CATALOG}/{SCHEMA}/landing/{uuid.uuid4().hex}{ext}"
     try:
-        _w().files.upload(path, io.BytesIO(data), overwrite=True)
+        _w(_user_token(request)).files.upload(path, io.BytesIO(data), overwrite=True)
         return {"volume_path": path}
     except Exception as e:  # noqa: BLE001
         return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=200)
@@ -135,7 +148,7 @@ def _me(request: Request):
     name = h.get("x-forwarded-preferred-username") or email
     if not email:
         try:
-            email = _w().current_user.me().user_name or ""
+            email = _w(_user_token(request)).current_user.me().user_name or ""
             name = email
         except Exception:  # noqa: BLE001
             pass
