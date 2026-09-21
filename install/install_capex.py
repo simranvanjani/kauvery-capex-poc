@@ -143,31 +143,10 @@ RETURN (
     ORDER BY value_score DESC, min_price ASC LIMIT 20 ) )
 """)
 
-# price_fairness wraps the serving endpoint via ai_query, and Databricks validates that endpoint at
-# CREATE time. On a first install the endpoint doesn't exist yet (it's built in §5), so this would
-# fail. It's OPTIONAL — the app scores via the endpoint directly, not this function — so create it
-# best-effort; re-run this cell after §5 (or on a later install) once the endpoint is READY.
-try:
-    spark.sql(f"""
-    CREATE OR REPLACE FUNCTION {CATALOG}.{SCHEMA}.price_fairness(
-      item_description STRING, make_brand STRING, model_no STRING, qty INT, unit_rate DOUBLE,
-      warranty_months INT, amc_present BOOLEAN, foc_present BOOLEAN, delivery_lead_days INT,
-      payment_terms STRING, has_training BOOLEAN, has_installation BOOLEAN)
-    RETURNS STRING
-    COMMENT 'Scores one quotation line item via the {ENDPOINT} model serving endpoint.'
-    RETURN ai_query('{ENDPOINT}', named_struct(
-      'item_description', item_description, 'make_brand', make_brand, 'model_no', model_no,
-      'qty', qty, 'unit_rate', unit_rate, 'warranty_months', warranty_months,
-      'amc_present', amc_present, 'camc_present', false, 'foc_present', foc_present,
-      'delivery_lead_days', delivery_lead_days, 'payment_terms', payment_terms,
-      'has_training', has_training, 'has_installation', has_installation))
-    """)
-    print("functions ready: cross_unit_history, recommend_vendor, price_fairness")
-except Exception as e:
-    print("functions ready: cross_unit_history, recommend_vendor")
-    print(f"[skipped] price_fairness needs the '{ENDPOINT}' serving endpoint to exist first "
-          f"({_brief(e)}). It's optional — the app scores via the endpoint directly. Re-run this "
-          f"cell after §5 creates the endpoint if you want the SQL/Genie scorer function.")
+# price_fairness (optional SQL/Genie wrapper over the model endpoint) is created in §5 instead —
+# ai_query is validated against the endpoint at CREATE time, so it can only be made once §5's
+# serving endpoint exists and is READY. The app itself scores via the endpoint directly, not this fn.
+print("functions ready: cross_unit_history, recommend_vendor")
 
 # COMMAND ----------
 
@@ -200,7 +179,7 @@ else:
     print(f"{FULL_MODEL} {reason} via {TRAIN_NOTEBOOK_PATH} …")
     try:
         dbutils.notebook.run(TRAIN_NOTEBOOK_PATH, 3600, {
-            "data_source": "real", "catalog": CATALOG, "schema": SCHEMA, "model_name": MODEL_NAME})
+            "catalog": CATALOG, "schema": SCHEMA, "model_name": MODEL_NAME})
         model_exists = True
         print("training complete — new version registered and @prod moved to it (endpoint updates in step 5).")
     except Exception as e:
@@ -239,6 +218,41 @@ try:
 except Exception as e:
     print(f"[action needed] endpoint step failed: {_brief(e)}. If the model isn't trained yet or has no "
           f"@prod alias, finish step 4 then re-run this cell.")
+
+# COMMAND ----------
+
+# MAGIC %md ## 5b · price_fairness  (optional SQL/Genie scorer — created once the endpoint is READY)
+
+# COMMAND ----------
+
+# price_fairness wraps the serving endpoint via ai_query, which Databricks validates at CREATE time,
+# so it can only be built after §5's endpoint exists and is READY. Best-effort; the app scores via the
+# endpoint directly and does not need this function.
+import time
+try:
+    for _ in range(60):  # wait up to ~5 min for a freshly-created endpoint to provision
+        _st = w.serving_endpoints.get(ENDPOINT).state
+        if _st and "READY" in str(getattr(_st, "ready", "")):
+            break
+        time.sleep(5)
+    spark.sql(f"""
+    CREATE OR REPLACE FUNCTION {CATALOG}.{SCHEMA}.price_fairness(
+      item_description STRING, make_brand STRING, model_no STRING, qty INT, unit_rate DOUBLE,
+      warranty_months INT, amc_present BOOLEAN, foc_present BOOLEAN, delivery_lead_days INT,
+      payment_terms STRING, has_training BOOLEAN, has_installation BOOLEAN)
+    RETURNS STRING
+    COMMENT 'Scores one quotation line item via the {ENDPOINT} model serving endpoint.'
+    RETURN ai_query('{ENDPOINT}', named_struct(
+      'item_description', item_description, 'make_brand', make_brand, 'model_no', model_no,
+      'qty', qty, 'unit_rate', unit_rate, 'warranty_months', warranty_months,
+      'amc_present', amc_present, 'camc_present', false, 'foc_present', foc_present,
+      'delivery_lead_days', delivery_lead_days, 'payment_terms', payment_terms,
+      'has_training', has_training, 'has_installation', has_installation))
+    """)
+    print(f"price_fairness ready — SQL/Genie scorer over {ENDPOINT}.")
+except Exception as e:
+    print(f"[note] price_fairness not created ({_brief(e)}). Optional — the app scores via the endpoint "
+          f"directly. Re-run this cell once {ENDPOINT} is READY.")
 
 # COMMAND ----------
 
