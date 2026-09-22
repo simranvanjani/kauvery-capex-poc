@@ -136,7 +136,9 @@ async def _upload(request: Request):
     ext = ("." + fname.rsplit(".", 1)[-1]) if "." in fname else ".pdf"
     path = f"/Volumes/{CATALOG}/{SCHEMA}/{VOLUME}/{uuid.uuid4().hex}{ext}"
     try:
-        _w(_user_token(request)).files.upload(path, io.BytesIO(data), overwrite=True)
+        # Pass raw bytes (not BytesIO): the SDK/base client sets Content-Length via len(contents),
+        # which raises "object of type '_io.BytesIO' has no len()" for a stream.
+        _w(_user_token(request)).files.upload(path, data, overwrite=True)
         return {"volume_path": path}
     except Exception as e:  # noqa: BLE001
         return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=200)
