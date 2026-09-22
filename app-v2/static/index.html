@@ -426,7 +426,11 @@
     const turn = body && body.closest ? body.closest('.turn') : null;
     if(turn){ turn.dataset.mid = (j && j.message_id!=null) ? j.message_id : ''; turn.dataset.sid = (j && j.session_id) || SESSION_ID; }
   }
-  function sendFeedback(sid, mid, rating, comment){
+  function sendFeedback(turn, sid, mid, rating, comment){
+    // Only record on first response, or when the rating/comment actually changes for this message.
+    const sig = rating + '|' + (comment || '');
+    if(turn && turn.dataset.fbSig === sig) return;
+    if(turn) turn.dataset.fbSig = sig;
     fetch('/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({session_id:sid, message_id:mid, rating:rating, comment:comment})}).catch(()=>{});
   }
@@ -443,7 +447,7 @@
     if(kind === 'up'){
       if(existing) existing.remove();
       if(lbl) lbl.textContent = 'Logged as helpful';
-      sendFeedback(sid, mid, 'up', null);
+      sendFeedback(turn, sid, mid, 'up', null);
       return;
     }
     // thumbs-down -> reveal an inline comment box (one per message)
@@ -456,8 +460,8 @@
     if(wrap) wrap.appendChild(note);
     const txt = note.querySelector('textarea'); txt.focus();
     const done = () => { if(lbl) lbl.textContent = 'Thanks — feedback sent'; note.remove(); };
-    note.querySelector('.fb-skip').addEventListener('click', () => { sendFeedback(sid, mid, 'down', null); done(); });
-    note.querySelector('.fb-send').addEventListener('click', () => { sendFeedback(sid, mid, 'down', (txt.value || '').trim() || null); done(); });
+    note.querySelector('.fb-skip').addEventListener('click', () => { sendFeedback(turn, sid, mid, 'down', null); done(); });
+    note.querySelector('.fb-send').addEventListener('click', () => { sendFeedback(turn, sid, mid, 'down', (txt.value || '').trim() || null); done(); });
   };
 
   // ---- view toggle: Review <-> Monitor ----

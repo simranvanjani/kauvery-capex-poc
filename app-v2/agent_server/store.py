@@ -197,6 +197,17 @@ def get_session_messages(session_id: str) -> list[dict]:
 def add_feedback(
     message_id: int | None, session_id: str, user_email: str, rating: str, comment: str | None = None
 ) -> None:
+    # One feedback row per message: update the existing row when the rating/comment changes rather
+    # than appending duplicates (repeated clicks of the same rating are no-ops on the frontend too).
+    if message_id is not None:
+        updated = _exec(
+            f"""UPDATE {SCHEMA}.feedback SET rating = %s, comment = %s, user_email = %s, ts = now()
+                WHERE message_id = %s RETURNING id""",
+            (rating, comment, user_email, message_id),
+            fetch="one",
+        )
+        if updated:
+            return
     _exec(
         f"""INSERT INTO {SCHEMA}.feedback(message_id, session_id, user_email, rating, comment)
             VALUES(%s, %s, %s, %s, %s)""",
