@@ -30,12 +30,9 @@ resources:
 
       # On-behalf-of-user: the app forwards the signed-in user's token and the agent's tools act as
       # that user. Databricks enforces both these scopes AND the user's own grants.
-      # iam.current-user:read / iam.access-control:read are auto-added and are NOT requestable —
-      # listing them makes the whole user_api_scopes list get rejected on deploy.
-      user_api_scopes:
-        - sql
-        - serving.serving-endpoints
-        - files.files
+      # Auth: tool calls run as the app service principal (OBO/user_api_scopes was unreliable in
+      # this workspace). Grant the SP UC permissions (USE CATALOG/SCHEMA, SELECT on the history
+      # table, EXECUTE on the functions, READ/WRITE VOLUME) separately via SQL GRANT.
 
       config:
         command: ["uv", "run", "start-server"]

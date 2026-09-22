@@ -106,9 +106,8 @@ async def _chat(request: Request):
         messages = [{"role": "user", "content": payload["message"]}]
     session_id = payload.get("session_id") or uuid.uuid4().hex
     email = _user_email(request)
-    # OBO: run the agent's tools (warehouse SQL, scoring endpoint, PDF parse) as the signed-in user.
-    from agent_server.agent import set_user_token
-    set_user_token(_user_token(request))
+    # Tool calls run as the app service principal (OBO was unreliable in-workspace); the SP holds the
+    # UC + endpoint + warehouse grants.
     user_text = next((m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), "")
     msgs = normalize_history_items(messages)
     try:
@@ -136,14 +135,13 @@ async def _upload(request: Request):
     fname = request.headers.get("x-filename", "quotation.pdf")
     ext = ("." + fname.rsplit(".", 1)[-1]) if "." in fname else ".pdf"
     path = f"/Volumes/{CATALOG}/{SCHEMA}/{VOLUME}/{uuid.uuid4().hex}{ext}"
-    # Raw PUT to the Files API. SDK 0.140's files.upload rejects every in-memory form (bytes lack
-    # .seekable(); BytesIO/BufferedReader hit len() on a stream), so bypass the helper: a plain PUT
-    # with the raw bytes body works (Content-Length from len(bytes)). Runs as the user via OBO.
-    tok = _user_token(request)
+    # Raw PUT to the Files API as the app SERVICE PRINCIPAL (OBO was unreliable). SDK 0.140's
+    # files.upload rejects every in-memory form (bytes lack .seekable(); BytesIO/BufferedReader hit
+    # len() on a stream), so bypass the helper: a plain PUT with the raw bytes body works.
     try:
-        w = _w(tok)
+        w = _w(None)  # SP
         host = (w.config.host or os.environ.get("DATABRICKS_HOST", "")).rstrip("/")
-        auth = f"Bearer {tok}" if tok else (w.config.authenticate() or {}).get("Authorization", "")
+        auth = (w.config.authenticate() or {}).get("Authorization", "")
         resp = requests.put(
             f"{host}/api/2.0/fs/files{path}", params={"overwrite": "true"},
             headers={"Authorization": auth, "Content-Type": "application/octet-stream"},
@@ -163,7 +161,7 @@ def _me(request: Request):
     name = h.get("x-forwarded-preferred-username") or email
     if not email:
         try:
-            email = _w(_user_token(request)).current_user.me().user_name or ""
+            email = _w(None).current_user.me().user_name or ""
             name = email
         except Exception:  # noqa: BLE001
             pass

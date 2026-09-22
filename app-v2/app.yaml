@@ -1,18 +1,9 @@
 command: ["uv", "run", "start-server"]
 # databricks apps listen on port 8000; start-server serves our custom UI + /api + the agent.
-
-# On-behalf-of-user (OBO): the app forwards the signed-in user's token (x-forwarded-access-token)
-# and the agent's tools act AS THAT USER. These are the scopes the app may request; Databricks still
-# enforces the user's own grants on the warehouse / endpoints / volumes.
-#   sql                        -> warehouse SQL (history UC functions + ai_query PDF parse)
-#   serving.serving-endpoints  -> scoring model (capex-worth-it) + FM extract/chat endpoints
-#   files.files                -> upload the quotation PDF to the UC Volume
-# (iam.current-user:read / iam.access-control:read are added automatically — they are NOT
-#  requestable here; listing them makes the whole user_api_scopes list get rejected.)
-user_api_scopes:
-  - sql
-  - serving.serving-endpoints
-  - files.files
+# Auth: all tool calls run as the app SERVICE PRINCIPAL (OBO/user_api_scopes was unreliable in this
+# workspace — user tokens weren't granted the requested scopes). The SP is granted the UC
+# permissions (USE CATALOG/SCHEMA, SELECT on the history table, EXECUTE on the functions, READ/WRITE
+# VOLUME) plus the endpoint/warehouse resource grants declared on the app.
 
 env:
   - name: MLFLOW_TRACKING_URI

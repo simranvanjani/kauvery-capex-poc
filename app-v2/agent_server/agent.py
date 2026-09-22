@@ -47,10 +47,10 @@ UC_FN_SUFFIX = os.getenv("UC_FN_SUFFIX", "")
 
 _WC: WorkspaceClient | None = None
 
-# On-behalf-of-user (OBO): the FastAPI routes set the signed-in user's forwarded token here per
-# request; every tool then acts AS THAT USER against the warehouse / serving endpoints / volumes.
-# Databricks enforces the app's declared user_api_scopes AND the user's own grants — so history,
-# scoring, and PDF parsing are governed per user rather than via a shared service principal.
+# OBO was unreliable in this workspace (user tokens weren't granted the requested scopes), so all
+# tool calls run as the app SERVICE PRINCIPAL, which is granted the needed UC permissions (USE
+# CATALOG/SCHEMA, SELECT on the history table, EXECUTE on the functions, READ/WRITE VOLUME) plus the
+# endpoint/warehouse resource grants. set_user_token is kept as a harmless no-op for the caller.
 _USER_TOKEN: contextvars.ContextVar[str | None] = contextvars.ContextVar("user_token", default=None)
 
 
@@ -59,11 +59,8 @@ def set_user_token(token: str | None) -> None:
 
 
 def wc() -> WorkspaceClient:
-    """User-scoped client when an OBO token is present (tools run as the signed-in user); otherwise
-    the app service principal (local dev / no forwarded token)."""
-    token = _USER_TOKEN.get()
-    if token:
-        return WorkspaceClient(token=token, auth_type="pat")
+    """App service-principal client. Tool calls (FM parse, model endpoint, UC functions) run as the
+    SP, which holds all the required grants."""
     global _WC
     if _WC is None:
         _WC = WorkspaceClient()
