@@ -7,12 +7,12 @@ command: ["uv", "run", "start-server"]
 #   sql                        -> warehouse SQL (history UC functions + ai_query PDF parse)
 #   serving.serving-endpoints  -> scoring model (capex-worth-it) + FM extract/chat endpoints
 #   files.files                -> upload the quotation PDF to the UC Volume
-#   iam.current-user:read      -> resolve the signed-in user for history isolation
+# (iam.current-user:read / iam.access-control:read are added automatically — they are NOT
+#  requestable here; listing them makes the whole user_api_scopes list get rejected.)
 user_api_scopes:
   - sql
   - serving.serving-endpoints
   - files.files
-  - iam.current-user:read
 
 env:
   - name: MLFLOW_TRACKING_URI
