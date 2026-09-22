@@ -202,6 +202,15 @@ async def _feedback(request: Request):
     return {"ok": True}
 
 
+@app.get("/api/feedback/list")
+def _feedback_list():
+    """All feedback (thumbs + comments) for the admin Monitor page. Best-effort."""
+    try:
+        return {"feedback": store.list_feedback()}
+    except Exception:  # noqa: BLE001
+        return {"feedback": []}
+
+
 if _STATIC.exists():
     app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
 

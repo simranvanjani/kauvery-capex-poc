@@ -202,3 +202,21 @@ def add_feedback(
             VALUES(%s, %s, %s, %s, %s)""",
         (message_id, session_id, user_email, rating, comment),
     )
+
+
+def list_feedback(limit: int = 200) -> list[dict]:
+    """All feedback rows, newest first — for the admin Monitor page."""
+    rows = (
+        _exec(
+            f"""SELECT id, message_id, session_id, user_email, rating, comment, ts
+                FROM {SCHEMA}.feedback ORDER BY ts DESC LIMIT %s""",
+            (limit,),
+            fetch="all",
+        )
+        or []
+    )
+    return [
+        {"id": r[0], "message_id": r[1], "session_id": r[2], "user_email": r[3],
+         "rating": r[4], "comment": r[5], "ts": r[6].isoformat() if r[6] else None}
+        for r in rows
+    ]
