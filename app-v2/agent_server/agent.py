@@ -2,6 +2,7 @@ import contextvars
 import json
 import logging
 import os
+import re
 from contextlib import AsyncExitStack
 from typing import AsyncGenerator
 
@@ -88,6 +89,24 @@ def _uc_fn(fn: str, search: str):
         return []
 
 
+def _uc_search(fn: str, search: str):
+    """Call a history UC function; the function matches `search` as a whole substring of the
+    item/model/brand, so a verbose line-item description (e.g. 'Multi-parameter Patient Monitor
+    (Philips IntelliVue MX450)') finds nothing. If the full phrase is empty, retry with each
+    significant word (longest first) so comparable history is still found regardless of how the
+    agent phrased the search."""
+    res = _uc_fn(fn, search)
+    if (isinstance(res, list) and res) or (isinstance(res, dict) and res.get("error")):
+        return res
+    tokens = sorted({t for t in re.split(r"[^A-Za-z0-9]+", search or "") if len(t) >= 4},
+                    key=len, reverse=True)
+    for tok in tokens:
+        r = _uc_fn(fn, tok)
+        if isinstance(r, list) and r:
+            return r
+    return res
+
+
 # ---- CAPEX tools ------------------------------------------------------------------
 @function_tool
 def parse_quotation_pdf(volume_path: str) -> str:
@@ -157,14 +176,14 @@ def score_line_item(
 def cross_unit_history(search: str) -> str:
     """Historical purchases of a matching item across ALL Kauvery units, cheapest first, as JSON.
     Use the item / model / brand as `search`."""
-    return json.dumps(_uc_fn(f"cross_unit_history{UC_FN_SUFFIX}", search))
+    return json.dumps(_uc_search(f"cross_unit_history{UC_FN_SUFFIX}", search))
 
 
 @function_tool
 def recommend_vendor(search: str) -> str:
     """Vendors ranked by value-for-money for a matching item (bundled FOC + AMC at a low price rank
     highest), as JSON. Use the item / model / brand as `search`."""
-    return json.dumps(_uc_fn(f"recommend_vendor{UC_FN_SUFFIX}", search))
+    return json.dumps(_uc_search(f"recommend_vendor{UC_FN_SUFFIX}", search))
 
 
 CAPEX_INSTRUCTIONS = (
