@@ -24,8 +24,9 @@ if Path(__file__).parents[1].joinpath(".git").exists() and os.getenv("MLFLOW_EXP
 
 # ============ Custom CAPEX Copilot frontend + API ============
 import re  # noqa: E402
-import tempfile  # noqa: E402
 import uuid  # noqa: E402
+
+import requests  # noqa: E402
 
 from agents import Runner  # noqa: E402
 from fastapi import Request  # noqa: E402
@@ -135,22 +136,24 @@ async def _upload(request: Request):
     fname = request.headers.get("x-filename", "quotation.pdf")
     ext = ("." + fname.rsplit(".", 1)[-1]) if "." in fname else ".pdf"
     path = f"/Volumes/{CATALOG}/{SCHEMA}/{VOLUME}/{uuid.uuid4().hex}{ext}"
-    # SDK 0.140 files.upload (FilesExt) needs a real, seekable file handle: bytes lack .seekable(),
-    # and a BytesIO has no usable fileno() so the SDK falls back to len() (which a stream lacks).
-    # A real temp file supports seekable() + fileno() (size via fstat) — the documented input.
-    tmp = None
+    # Raw PUT to the Files API. SDK 0.140's files.upload rejects every in-memory form (bytes lack
+    # .seekable(); BytesIO/BufferedReader hit len() on a stream), so bypass the helper: a plain PUT
+    # with the raw bytes body works (Content-Length from len(bytes)). Runs as the user via OBO.
+    tok = _user_token(request)
     try:
-        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tf:
-            tf.write(data)
-            tmp = tf.name
-        with open(tmp, "rb") as fh:
-            _w(_user_token(request)).files.upload(path, fh, overwrite=True)
+        w = _w(tok)
+        host = (w.config.host or os.environ.get("DATABRICKS_HOST", "")).rstrip("/")
+        auth = f"Bearer {tok}" if tok else (w.config.authenticate() or {}).get("Authorization", "")
+        resp = requests.put(
+            f"{host}/api/2.0/fs/files{path}", params={"overwrite": "true"},
+            headers={"Authorization": auth, "Content-Type": "application/octet-stream"},
+            data=data, timeout=120,
+        )
+        if resp.status_code >= 400:
+            return JSONResponse({"error": f"upload failed ({resp.status_code}): {resp.text[:300]}"}, status_code=200)
         return {"volume_path": path}
     except Exception as e:  # noqa: BLE001
         return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=200)
-    finally:
-        if tmp and os.path.exists(tmp):
-            os.remove(tmp)
 
 
 @app.get("/api/me")
