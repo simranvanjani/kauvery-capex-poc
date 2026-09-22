@@ -23,8 +23,8 @@ if Path(__file__).parents[1].joinpath(".git").exists() and os.getenv("MLFLOW_EXP
 
 
 # ============ Custom CAPEX Copilot frontend + API ============
-import io  # noqa: E402
 import re  # noqa: E402
+import tempfile  # noqa: E402
 import uuid  # noqa: E402
 
 from agents import Runner  # noqa: E402
@@ -135,13 +135,22 @@ async def _upload(request: Request):
     fname = request.headers.get("x-filename", "quotation.pdf")
     ext = ("." + fname.rsplit(".", 1)[-1]) if "." in fname else ".pdf"
     path = f"/Volumes/{CATALOG}/{SCHEMA}/{VOLUME}/{uuid.uuid4().hex}{ext}"
+    # SDK 0.140 files.upload (FilesExt) needs a real, seekable file handle: bytes lack .seekable(),
+    # and a BytesIO has no usable fileno() so the SDK falls back to len() (which a stream lacks).
+    # A real temp file supports seekable() + fileno() (size via fstat) — the documented input.
+    tmp = None
     try:
-        # Pass raw bytes (not BytesIO): the SDK/base client sets Content-Length via len(contents),
-        # which raises "object of type '_io.BytesIO' has no len()" for a stream.
-        _w(_user_token(request)).files.upload(path, data, overwrite=True)
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tf:
+            tf.write(data)
+            tmp = tf.name
+        with open(tmp, "rb") as fh:
+            _w(_user_token(request)).files.upload(path, fh, overwrite=True)
         return {"volume_path": path}
     except Exception as e:  # noqa: BLE001
         return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=200)
+    finally:
+        if tmp and os.path.exists(tmp):
+            os.remove(tmp)
 
 
 @app.get("/api/me")
