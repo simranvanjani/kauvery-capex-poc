@@ -38,6 +38,7 @@ from agent_server.history import normalize_history_items  # noqa: E402
 _STATIC = Path(__file__).parents[1] / "static"
 CATALOG = os.getenv("CATALOG", "kauvey_poc")
 SCHEMA = os.getenv("SCHEMA", "gold")
+VOLUME = os.getenv("VOLUME", "landing")  # UC Volume uploaded quotation PDFs land in
 
 # Conversation history + feedback persistence on the capex-v2 Lakebase. Best-effort: if the DB is
 # unreachable, chat/review still work and only history + feedback degrade.
@@ -133,7 +134,7 @@ async def _upload(request: Request):
     data = await request.body()
     fname = request.headers.get("x-filename", "quotation.pdf")
     ext = ("." + fname.rsplit(".", 1)[-1]) if "." in fname else ".pdf"
-    path = f"/Volumes/{CATALOG}/{SCHEMA}/landing/{uuid.uuid4().hex}{ext}"
+    path = f"/Volumes/{CATALOG}/{SCHEMA}/{VOLUME}/{uuid.uuid4().hex}{ext}"
     try:
         _w(_user_token(request)).files.upload(path, io.BytesIO(data), overwrite=True)
         return {"volume_path": path}

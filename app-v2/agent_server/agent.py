@@ -41,6 +41,9 @@ MODEL_ENDPOINT = os.getenv("MODEL_ENDPOINT", "capex-worth-it")  # custom scikit-
 WAREHOUSE_ID = os.getenv("DATABRICKS_WAREHOUSE_ID", "")
 CATALOG = os.getenv("CATALOG", "kauvey_poc")
 SCHEMA = os.getenv("SCHEMA", "gold")
+# Suffix appended to the UC history functions (cross_unit_history / recommend_vendor) so a suffixed
+# install (e.g. "_v2_22") resolves its own functions. Empty for the default install.
+UC_FN_SUFFIX = os.getenv("UC_FN_SUFFIX", "")
 
 _WC: WorkspaceClient | None = None
 
@@ -157,14 +160,14 @@ def score_line_item(
 def cross_unit_history(search: str) -> str:
     """Historical purchases of a matching item across ALL Kauvery units, cheapest first, as JSON.
     Use the item / model / brand as `search`."""
-    return json.dumps(_uc_fn("cross_unit_history", search))
+    return json.dumps(_uc_fn(f"cross_unit_history{UC_FN_SUFFIX}", search))
 
 
 @function_tool
 def recommend_vendor(search: str) -> str:
     """Vendors ranked by value-for-money for a matching item (bundled FOC + AMC at a low price rank
     highest), as JSON. Use the item / model / brand as `search`."""
-    return json.dumps(_uc_fn("recommend_vendor", search))
+    return json.dumps(_uc_fn(f"recommend_vendor{UC_FN_SUFFIX}", search))
 
 
 CAPEX_INSTRUCTIONS = (

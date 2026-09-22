@@ -44,15 +44,17 @@
 dbutils.widgets.text("catalog", "kauvey_poc", "Catalog")
 dbutils.widgets.text("schema", "gold", "Schema")
 dbutils.widgets.text("model_name", "capex_worth_it", "Registered model name")
+dbutils.widgets.text("volume", "landing", "Landing volume")
+dbutils.widgets.text("comparison_table", "quote_comparison_sheets", "Comparison sheet table")
 
 CATALOG = dbutils.widgets.get("catalog").strip()
 SCHEMA = dbutils.widgets.get("schema").strip()
 MODEL_NAME = dbutils.widgets.get("model_name").strip()
+VOLUME = dbutils.widgets.get("volume").strip()
 
 HIST_TABLE = f"{CATALOG}.{SCHEMA}.extracted_pdf_datas"
-COMPARISON_TABLE = f"{CATALOG}.{SCHEMA}.quote_comparison_sheets"
+COMPARISON_TABLE = f"{CATALOG}.{SCHEMA}.{dbutils.widgets.get('comparison_table').strip()}"
 FULL_MODEL_NAME = f"{CATALOG}.{SCHEMA}.{MODEL_NAME}"
-VOLUME = "landing"
 VOLUME_PATH = f"/Volumes/{CATALOG}/{SCHEMA}/{VOLUME}"
 
 print(f"Catalog/Schema : {CATALOG}.{SCHEMA}")
@@ -415,7 +417,7 @@ print("pip_requirements:", PIP_REQS)
 
 mlflow.set_registry_uri("databricks-uc")
 me = WorkspaceClient().current_user.me().user_name
-exp_dir = f"/Users/{me}/kauvery_capex_phase2"
+exp_dir = f"/Users/{me}/kauvery_capex_phase2_{MODEL_NAME}"
 try:
     WorkspaceClient().workspace.mkdirs(exp_dir)
     mlflow.set_experiment(f"{exp_dir}/mlflow_experiment")
@@ -505,6 +507,26 @@ for _, r in result.iterrows():
 
 # Write the comparison sheet back to Delta (rendered in-app / exportable to Excel downstream).
 from datetime import datetime, timezone
+import math
+from pyspark.sql.types import (StructType, StructField, StringType, IntegerType,
+                               DoubleType, TimestampType)
+
+def _native(v):
+    """Coerce numpy / pandas scalars (and NaN) to plain Python so spark.createDataFrame accepts them."""
+    if v is None:
+        return None
+    if isinstance(v, float) and math.isnan(v):
+        return None
+    if isinstance(v, np.integer):
+        return int(v)
+    if isinstance(v, np.floating):
+        return None if math.isnan(float(v)) else float(v)
+    if isinstance(v, (np.bool_,)):
+        return bool(v)
+    if isinstance(v, pd.Timestamp):
+        return v.to_pydatetime()
+    return v
+
 comp = result.copy()
 comp["scored_at"] = datetime.now(timezone.utc)
 comp["quote_ref"] = quote["quote_ref"]
@@ -542,12 +564,12 @@ display(spark.table(COMPARISON_TABLE))
 # Gap-detection recall on a synthetic labeled set with known omissions.
 gap_eval, expected = [], []
 # Category removed: evaluate gap detection against the single universal Reference BOM.
-cat, bom = "General", reference_bom["_default"]
+bom = reference_bom
 for i in range(200):
     drop_amc = np.random.rand() < 0.5
     drop_foc = ("foc_accessories" in bom["requires"]) and np.random.rand() < 0.5
     short_warr = np.random.rand() < 0.4
-    row = {"item_description": f"test {cat}", "make_brand": "GE Healthcare", "model_no": "TEST",
+    row = {"item_description": "test item", "make_brand": "GE Healthcare", "model_no": "TEST",
            "warranty_months": 12 if short_warr else 24,
            "amc_present": not drop_amc, "camc_present": False,
            "foc_present": not drop_foc, "has_training": True, "has_installation": True}
@@ -555,7 +577,7 @@ for i in range(200):
     if short_warr: truth.add("Warranty")
     if drop_amc and "amc_camc" in bom["requires"]: truth.add("AMC/CMC")
     if drop_foc: truth.add("FOC accessories")
-    found = {g["component"] for g in cs.detect_gaps(row, cat, reference_bom, component_examples)}
+    found = {g["component"] for g in cs.detect_gaps(row, reference_bom, component_examples)}
     expected.append(truth); gap_eval.append(found)
 
 tp = sum(len(t & f) for t, f in zip(expected, gap_eval))
