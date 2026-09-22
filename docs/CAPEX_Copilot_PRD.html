@@ -1,0 +1,449 @@
+<title>CAPEX Copilot PRD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#F5F7F9; --surface:#FFFFFF; --surface-2:#EEF1F5; --raise:#F8FAFB;
+    --ink:#15181E; --ink-2:#454F5D; --muted:#788493; --line:#E3E7ED; --line-2:#D0D6DF;
+    --accent:#1B6FDA; --accent-ink:#134F9E; --accent-weak:rgba(27,111,218,.09);
+    --teal:#1F8E82;
+    --good:#1C876E; --good-bg:rgba(28,135,110,.11);
+    --warn:#B0761A; --warn-bg:rgba(176,118,26,.13);
+    --risk:#C1362D; --risk-bg:rgba(193,54,45,.10);
+    --serif:"IBM Plex Serif",Georgia,serif;
+    --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+    --maxw:1120px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#0B0E13; --surface:#141922; --surface-2:#1B212C; --raise:#10151D;
+      --ink:#ECEFF4; --ink-2:#AEB8C6; --muted:#7C8794; --line:#222A36; --line-2:#2D3644;
+      --accent:#5AA0F0; --accent-ink:#8FBEF6; --accent-weak:rgba(90,160,240,.14);
+      --teal:#43C3B5;
+      --good:#3BB394; --good-bg:rgba(59,179,148,.15);
+      --warn:#DBA145; --warn-bg:rgba(219,161,69,.16);
+      --risk:#E06B62; --risk-bg:rgba(224,107,98,.15);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0B0E13; --surface:#141922; --surface-2:#1B212C; --raise:#10151D;
+    --ink:#ECEFF4; --ink-2:#AEB8C6; --muted:#7C8794; --line:#222A36; --line-2:#2D3644;
+    --accent:#5AA0F0; --accent-ink:#8FBEF6; --accent-weak:rgba(90,160,240,.14);
+    --teal:#43C3B5;
+    --good:#3BB394; --good-bg:rgba(59,179,148,.15);
+    --warn:#DBA145; --warn-bg:rgba(219,161,69,.16);
+    --risk:#E06B62; --risk-bg:rgba(224,107,98,.15);
+  }
+
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  .page{max-width:var(--maxw);margin:0 auto;padding-inline:20px;padding-block:0}
+  a{color:var(--accent-ink);text-decoration:none}
+  a:hover{text-decoration:underline}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+
+  /* masthead */
+  .masthead{padding-block:46px 30px;border-bottom:2px solid var(--ink)}
+  .eyebrow{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--accent-ink)}
+  .masthead h1{font-family:var(--serif);font-weight:600;font-size:clamp(34px,6vw,52px);
+    line-height:1.04;letter-spacing:-.01em;margin:14px 0 6px;text-wrap:balance}
+  .masthead .sub{font-size:17px;color:var(--ink-2);max-width:60ch}
+  .meta{display:flex;flex-wrap:wrap;gap:10px 26px;margin-top:24px}
+  .meta div{display:flex;flex-direction:column;gap:2px}
+  .meta .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .meta .v{font-size:13.5px;font-weight:600}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
+    padding:3px 10px;border-radius:999px;font-family:var(--mono)}
+  .pill.live{color:var(--good);background:var(--good-bg)}
+  .pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+
+  /* layout */
+  .layout{display:grid;grid-template-columns:210px 1fr;gap:48px;padding-block:36px 72px}
+  .toc{position:sticky;top:calc(env(safe-area-inset-top,0px) + 20px);align-self:start;
+    max-height:calc(100vh - 60px);overflow-y:auto}
+  .toc .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--muted);margin-bottom:12px}
+  .toc ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;counter-reset:t}
+  .toc a{display:flex;gap:9px;padding:5px 8px;border-radius:6px;color:var(--ink-2);font-size:13px;line-height:1.35}
+  .toc a:hover{background:var(--surface-2);text-decoration:none;color:var(--ink)}
+  .toc a .n{font-family:var(--mono);color:var(--muted);font-size:11.5px;padding-top:1px}
+
+  .content{min-width:0}
+  section{scroll-margin-top:24px;padding-block:8px 30px}
+  section + section{border-top:1px solid var(--line);padding-top:30px}
+  .sec-h{display:flex;align-items:baseline;gap:14px;margin:0 0 14px}
+  .sec-h .num{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent-ink);padding-top:4px}
+  h2{font-family:var(--serif);font-weight:600;font-size:25px;letter-spacing:-.01em;margin:0;text-wrap:balance}
+  h3{font-size:15px;font-weight:700;margin:22px 0 8px;letter-spacing:.01em}
+  p{margin:0 0 12px;max-width:68ch}
+  ul,ol.body{margin:0 0 12px;padding-left:20px;max-width:68ch}
+  li{margin:4px 0}
+  strong{font-weight:600}
+  code{font-family:var(--mono);font-size:12.5px;background:var(--surface-2);padding:1px 6px;border-radius:5px}
+
+  .lead{font-size:16.5px;color:var(--ink-2)}
+
+  /* summary callout */
+  .callout{background:var(--surface);border:1px solid var(--line-2);border-left:3px solid var(--accent);
+    border-radius:10px;padding:18px 20px;margin:0 0 8px}
+  .callout .t{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent-ink);margin-bottom:8px}
+
+  /* two-up grids */
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:6px 0 12px}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  .panel h4{margin:0 0 8px;font-size:13.5px;font-weight:700}
+  .panel.goals{border-top:3px solid var(--good)}
+  .panel.non{border-top:3px solid var(--muted)}
+  .panel ul{margin:0;padding-left:18px;max-width:none}
+  .panel li{font-size:13.5px;color:var(--ink-2)}
+
+  /* persona cards */
+  .persona{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:6px 0}
+  .pcard{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:15px 16px}
+  .pcard .role{font-weight:700;font-size:14px}
+  .pcard .who{font-family:var(--mono);font-size:11px;color:var(--muted);margin:2px 0 9px}
+  .pcard p{font-size:13px;color:var(--ink-2);margin:0;max-width:none}
+
+  /* requirement rows */
+  .reqs{display:flex;flex-direction:column;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface)}
+  .req{display:grid;grid-template-columns:64px 1fr;gap:14px;padding:13px 16px}
+  .req + .req{border-top:1px solid var(--line)}
+  .req .id{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent-ink)}
+  .req .rt{font-weight:600;font-size:14px}
+  .req .rd{font-size:13px;color:var(--ink-2);margin-top:2px}
+  .req .must{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;color:var(--good);border:1px solid var(--good);
+    border-radius:4px;padding:0 5px;margin-left:8px;vertical-align:1.5px;text-transform:uppercase}
+
+  /* metric tiles */
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);
+    border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:6px 0 14px}
+  .tile{background:var(--surface);padding:18px 18px}
+  .tile .v{font-family:var(--mono);font-size:30px;font-weight:600;letter-spacing:-.02em}
+  .tile .k{font-size:12.5px;font-weight:600;margin-top:4px}
+  .tile .d{font-size:12px;color:var(--muted);margin-top:3px}
+
+  /* feature importance bars */
+  .fi{display:flex;flex-direction:column;gap:9px;margin:8px 0 14px;max-width:560px}
+  .firow{display:grid;grid-template-columns:190px 1fr 46px;align-items:center;gap:12px;font-size:13px}
+  .firow .fn{color:var(--ink-2)}
+  .bar{height:9px;border-radius:5px;background:var(--surface-2);overflow:hidden}
+  .bar span{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--teal))}
+  .firow .fv{font-family:var(--mono);font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
+
+  /* tables */
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin:6px 0 12px}
+  table{border-collapse:collapse;width:100%;font-size:13px;min-width:520px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  thead th{font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+    font-weight:600;background:var(--raise)}
+  tbody tr:last-child td{border-bottom:none}
+  td.mono{font-family:var(--mono);font-size:12px}
+
+  .sev{display:inline-block;font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.04em;
+    text-transform:uppercase;padding:2px 8px;border-radius:5px;white-space:nowrap}
+  .sev.high{color:var(--risk);background:var(--risk-bg)}
+  .sev.med{color:var(--warn);background:var(--warn-bg)}
+  .sev.low{color:var(--muted);background:var(--surface-2)}
+
+  /* diagram */
+  .diagram{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;overflow-x:auto;margin:6px 0 12px}
+  .mermaid{min-width:520px}
+
+  /* callout note variants */
+  .note{border-radius:10px;padding:14px 16px;margin:8px 0 12px;font-size:13.5px}
+  .note.warn{background:var(--warn-bg);border:1px solid color-mix(in srgb,var(--warn) 34%,transparent)}
+  .note.warn b{color:var(--warn)}
+  .note .t{font-weight:700;margin-bottom:4px}
+
+  .foot{padding-block:26px 60px;border-top:1px solid var(--line);color:var(--muted);font-size:12.5px;
+    display:flex;flex-wrap:wrap;gap:6px 18px;justify-content:space-between}
+
+  @media (max-width:820px){
+    .layout{grid-template-columns:1fr;gap:0}
+    .toc{position:static;max-height:none;margin-bottom:8px;border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+    .toc ol{gap:0} .toc a{padding:7px 6px}
+    .cols,.persona{grid-template-columns:1fr}
+    .tiles{grid-template-columns:1fr}
+    .req{grid-template-columns:1fr}
+    .firow{grid-template-columns:130px 1fr 42px}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="page">
+  <header class="masthead">
+    <div class="eyebrow">Product Requirements · Proof of Concept</div>
+    <h1>CAPEX Copilot</h1>
+    <p class="sub">An AI assistant that reviews vendor equipment quotations against Kauvery Hospital's own purchase history — price fairness, missing inclusions, cross-site comparison, and a negotiation ask — in seconds.</p>
+    <div class="meta">
+      <div><span class="k">Customer</span><span class="v">Kauvery Hospital</span></div>
+      <div><span class="k">Platform</span><span class="v">Databricks (Azure)</span></div>
+      <div><span class="k">Status</span><span class="v"><span class="pill live">POC deployed</span></span></div>
+      <div><span class="k">Build</span><span class="v">v2_22</span></div>
+      <div><span class="k">Date</span><span class="v">22 Sep 2026</span></div>
+      <div><span class="k">Owner</span><span class="v">Databricks Scale SE</span></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="toc" aria-label="Contents">
+      <div class="lbl">Contents</div>
+      <ol>
+        <li><a href="#summary"><span class="n">00</span> Summary</a></li>
+        <li><a href="#problem"><span class="n">01</span> Problem &amp; context</a></li>
+        <li><a href="#goals"><span class="n">02</span> Goals &amp; non-goals</a></li>
+        <li><a href="#users"><span class="n">03</span> Users</a></li>
+        <li><a href="#solution"><span class="n">04</span> Solution overview</a></li>
+        <li><a href="#features"><span class="n">05</span> Requirements</a></li>
+        <li><a href="#arch"><span class="n">06</span> Architecture</a></li>
+        <li><a href="#model"><span class="n">07</span> The ML model</a></li>
+        <li><a href="#data"><span class="n">08</span> Data &amp; governance</a></li>
+        <li><a href="#success"><span class="n">09</span> Success metrics</a></li>
+        <li><a href="#risks"><span class="n">10</span> Risks</a></li>
+        <li><a href="#roadmap"><span class="n">11</span> Roadmap</a></li>
+      </ol>
+    </nav>
+
+    <main class="content">
+      <section id="summary">
+        <div class="callout">
+          <div class="t">In one paragraph</div>
+          <p style="margin:0">A procurement reviewer uploads a vendor quotation (PDF or typed). The Copilot extracts the line items, scores each one <strong>0–100</strong> against Kauvery's historical purchases with a custom, retrainable ML model, flags missing inclusions (warranty, AMC/CMC, training, FOC) with citations to real past POs, shows a cheapest-first cross-site price history, recommends the best-value vendor, and drafts a negotiation ask. It runs entirely inside Databricks — the customer's data never leaves the workspace.</p>
+        </div>
+      </section>
+
+      <section id="problem">
+        <div class="sec-h"><span class="num">01</span><h2>Problem &amp; context</h2></div>
+        <p class="lead">Kauvery's capital-equipment (CAPEX) purchasing is high-value and judgment-heavy, but quotation review is manual and inconsistent.</p>
+        <p>Vendor quotes arrive as free-form PDFs in wildly different layouts. Reviewers must judge whether a price is fair, whether the quote is missing standard inclusions, and how it compares to what other Kauvery units paid — largely from memory and scattered spreadsheets. There is no single, grounded reference for "what we normally pay and expect," so negotiating leverage and consistency vary by reviewer.</p>
+        <p>Kauvery already ingests historical purchase orders into a governed table (<code>extracted_pdf_datas</code>, ~8.8k rows across units). The opportunity: turn that history into an instant, explainable second opinion on every new quote.</p>
+      </section>
+
+      <section id="goals">
+        <div class="sec-h"><span class="num">02</span><h2>Goals &amp; non-goals</h2></div>
+        <div class="cols">
+          <div class="panel goals">
+            <h4>Goals</h4>
+            <ul>
+              <li>Review any vendor quotation (PDF or typed) in seconds.</li>
+              <li>Ground every judgment in Kauvery's <em>own</em> history, not generic web knowledge.</li>
+              <li>Produce a <strong>consistent, explainable</strong> verdict + price-fairness figure.</li>
+              <li>Surface missing inclusions with citations to real POs.</li>
+              <li>Recommend the best-value vendor and draft a negotiation ask.</li>
+              <li>Keep all data and inference inside the Databricks workspace.</li>
+              <li>Be a <strong>retrainable</strong> asset that improves as real outcomes are labeled.</li>
+            </ul>
+          </div>
+          <div class="panel non">
+            <h4>Non-goals (this POC)</h4>
+            <ul>
+              <li>Not an ERP / PO-issuing system — it advises, it doesn't purchase.</li>
+              <li>No contract-clause NLP / legal risk analysis (future).</li>
+              <li>No automated vendor outreach or email.</li>
+              <li>Not trained on real "good/bad deal" outcomes yet — see §07.</li>
+              <li>No mobile-native app; browser only.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="users">
+        <div class="sec-h"><span class="num">03</span><h2>Users</h2></div>
+        <div class="persona">
+          <div class="pcard">
+            <div class="role">Procurement reviewer</div>
+            <div class="who">CAPEX team · primary</div>
+            <p>Uploads quotes, reads the verdict + gaps, uses the negotiation ask. Wants a fast, trustworthy second opinion.</p>
+          </div>
+          <div class="pcard">
+            <div class="role">Biomedical lead</div>
+            <div class="who">Clinical / technical</div>
+            <p>Validates inclusions (warranty, AMC, training). Later: labels real outcomes to retrain the model.</p>
+          </div>
+          <div class="pcard">
+            <div class="role">Admin / program owner</div>
+            <div class="who">Oversight</div>
+            <p>Reviews the feedback Monitor to track quality and adoption of the assistant.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="solution">
+        <div class="sec-h"><span class="num">04</span><h2>Solution overview</h2></div>
+        <p class="lead">A hybrid that splits work by strength — the LLM for language, a custom ML model for the money decision.</p>
+        <p>The Copilot deliberately does <strong>not</strong> ask a language model "is this quote worth it?". That number must be deterministic, explainable, governed, and improvable — so it comes from a custom model. The LLM does what it's best at: understanding messy quotes and writing a clear review.</p>
+        <div class="cols">
+          <div class="panel"><h4>Claude — the brain</h4><p style="font-size:13.5px;color:var(--ink-2);margin:0">Orchestrates the review, decides which tools to call, explains gaps, and writes the narrative + negotiation strategy.</p></div>
+          <div class="panel"><h4>Llama — the extractor</h4><p style="font-size:13.5px;color:var(--ink-2);margin:0">Turns an arbitrary-layout PDF into structured line items (the one model that supports <code>ai_query</code> JSON output).</p></div>
+          <div class="panel"><h4>scikit-learn — the scorer</h4><p style="font-size:13.5px;color:var(--ink-2);margin:0">The governed 0–100 worth-score + verdict + deterministic gap detection. Versioned in Unity Catalog, served at low latency.</p></div>
+          <div class="panel"><h4>Your history — the ground truth</h4><p style="font-size:13.5px;color:var(--ink-2);margin:0">Every price, benchmark, and vendor comes from Kauvery's own POs — never a model's general knowledge.</p></div>
+        </div>
+      </section>
+
+      <section id="features">
+        <div class="sec-h"><span class="num">05</span><h2>Functional requirements</h2></div>
+        <div class="reqs">
+          <div class="req"><span class="id">FR-1</span><div><span class="rt">Quotation intake<span class="must">must</span></span><div class="rd">Accept a vendor quote as an uploaded PDF <em>or</em> pasted/typed text; uploading auto-starts the review.</div></div></div>
+          <div class="req"><span class="id">FR-2</span><div><span class="rt">PDF extraction<span class="must">must</span></span><div class="rd">Parse any vendor layout into structured line items (item, brand, model, qty, unit rate, warranty, AMC/FOC, delivery, payment terms).</div></div></div>
+          <div class="req"><span class="id">FR-3</span><div><span class="rt">Worth score &amp; verdict<span class="must">must</span></span><div class="rd">Score each line item 0–100 → Accept / Negotiate / Reject, with a price-fairness % vs the most-recent comparable purchase.</div></div></div>
+          <div class="req"><span class="id">FR-4</span><div><span class="rt">Gap detection<span class="must">must</span></span><div class="rd">Flag missing warranty / AMC-CMC / training / installation / FOC, each citing a real historical PO + page.</div></div></div>
+          <div class="req"><span class="id">FR-5</span><div><span class="rt">Cross-unit history<span class="must">must</span></span><div class="rd">Cheapest-first table of comparable purchases across all Kauvery units (unit, vendor, date, price, warranty, maintenance, FOC).</div></div></div>
+          <div class="req"><span class="id">FR-6</span><div><span class="rt">Vendor recommendation</span><div class="rd">Rank vendors by value-for-money (bundled FOC + AMC at low price rank highest).</div></div></div>
+          <div class="req"><span class="id">FR-7</span><div><span class="rt">Negotiation ask</span><div class="rd">Draft an actionable ask to the vendor grounded in the gaps and comparable deals.</div></div></div>
+          <div class="req"><span class="id">FR-8</span><div><span class="rt">New-product handling<span class="must">must</span></span><div class="rd">When there is no Kauvery history for an item, say so plainly and review only what the quote provides — never invent a benchmark.</div></div></div>
+          <div class="req"><span class="id">FR-9</span><div><span class="rt">Conversation history</span><div class="rd">Per-user review history (7-day retention) in the sidebar; reopen a past review.</div></div></div>
+          <div class="req"><span class="id">FR-10</span><div><span class="rt">Feedback + Monitor</span><div class="rd">👍/👎 with an optional comment on each review (idempotent per message); an admin Monitor page lists all feedback.</div></div></div>
+          <div class="req"><span class="id">FR-11</span><div><span class="rt">Error transparency<span class="must">must</span></span><div class="rd">If the history DB or scoring model is unreachable, surface the error — never fabricate a benchmark or silently skip it.</div></div></div>
+        </div>
+      </section>
+
+      <section id="arch">
+        <div class="sec-h"><span class="num">06</span><h2>Architecture</h2></div>
+        <p>A single FastAPI process (a Databricks App) serves the UI, exposes the API, and hosts the agent in-process. All tool calls execute as the app <strong>service principal</strong> against the SQL warehouse, the serving endpoint, UC functions, and a UC Volume; history/feedback persist to Lakebase (best-effort).</p>
+        <div class="diagram">
+          <pre class="mermaid">
+flowchart TD
+  U["Reviewer · browser UI"] -->|upload PDF| UP["/api/upload"]
+  U -->|question / auto-send| CH["/api/chat"]
+  UP -->|raw PUT| VOL[("UC Volume · landing")]
+  CH --> AG["Agent · Claude<br/>orchestrate + write"]
+  AG --> T1["parse_quotation_pdf"]
+  AG --> T2["score_line_item"]
+  AG --> T3["cross_unit_history<br/>recommend_vendor"]
+  T1 -->|SQL: ai_parse_document<br/>+ ai_query · Llama| WH["SQL Warehouse"]
+  WH --> VOL
+  T2 --> EP["Serving endpoint<br/>capex-worth-it · sklearn"]
+  T3 --> FN["UC SQL functions"]
+  FN --> HT[("History · extracted_pdf_datas")]
+  AG -->|markdown review| U
+  CH -. persist .-> LB[("Lakebase · history + feedback")]
+  U -->|thumbs / comment| FB["/api/feedback"]
+  FB --> LB
+          </pre>
+        </div>
+        <h3>Request lifecycle</h3>
+        <ol class="body">
+          <li>PDF → <code>/api/upload</code> → raw PUT to the Files API → lands in the UC Volume.</li>
+          <li>UI auto-sends <code>/api/chat</code> with the volume path; the agent (Claude) runs.</li>
+          <li>Claude calls <code>parse_quotation_pdf</code> → warehouse SQL (<code>ai_parse_document</code> → <code>ai_query</code> with Llama) → line items.</li>
+          <li>Per line item: <code>score_line_item</code> → the serving endpoint (the ML model) → score, verdict, gaps.</li>
+          <li><code>cross_unit_history</code> / <code>recommend_vendor</code> → UC functions over the history table.</li>
+          <li>Claude composes the markdown review; messages persist to Lakebase.</li>
+        </ol>
+      </section>
+
+      <section id="model">
+        <div class="sec-h"><span class="num">07</span><h2>The ML model</h2></div>
+        <p class="lead">A scikit-learn <strong>GradientBoostingRegressor</strong>, wrapped as an MLflow PyFunc, registered in Unity Catalog, and served behind an endpoint.</p>
+        <p>Given one line item, it computes 7 features <em>relative to Kauvery's history</em> (price variance vs the most-recent comparable, warranty delta, AMC/FOC presence, delivery, purchase frequency, payment terms), outputs a worth-score 0–100 → verdict, and runs deterministic gap detection with PO citations.</p>
+
+        <h3>Trained-model metrics (build v2_22)</h3>
+        <div class="tiles">
+          <div class="tile"><div class="v">3.34</div><div class="k">MAE</div><div class="d">avg error on the 0–100 score</div></div>
+          <div class="tile"><div class="v">0.953</div><div class="k">R²</div><div class="d">variance explained</div></div>
+          <div class="tile"><div class="v">87.8%</div><div class="k">Verdict accuracy</div><div class="d">bucket match on held-out set</div></div>
+        </div>
+
+        <h3>What drives the score (feature importance)</h3>
+        <div class="fi">
+          <div class="firow"><span class="fn">Price variance vs benchmark</span><span class="bar"><span style="width:100%"></span></span><span class="fv">0.640</span></div>
+          <div class="firow"><span class="fn">Warranty delta (months)</span><span class="bar"><span style="width:47%"></span></span><span class="fv">0.298</span></div>
+          <div class="firow"><span class="fn">AMC / CMC present</span><span class="bar"><span style="width:6%"></span></span><span class="fv">0.039</span></div>
+          <div class="firow"><span class="fn">FOC accessories present</span><span class="bar"><span style="width:3%"></span></span><span class="fv">0.019</span></div>
+          <div class="firow"><span class="fn">Historical frequency</span><span class="bar"><span style="width:1%"></span></span><span class="fv">0.002</span></div>
+          <div class="firow"><span class="fn">Delivery lead days</span><span class="bar"><span style="width:1%"></span></span><span class="fv">0.002</span></div>
+          <div class="firow"><span class="fn">Payment terms</span><span class="bar"><span style="width:1%"></span></span><span class="fv">0.001</span></div>
+        </div>
+        <p style="font-size:13.5px;color:var(--ink-2)">Price + warranty drive ~94% of the decision — matching Kauvery's stated rubric weights, a good sign the model learned the intended logic. Hyperparameters: 300 trees, depth 3, learning-rate 0.05, 6,000 training rows.</p>
+
+        <div class="note warn">
+          <div class="t">⚠ What "accuracy" means here — read before quoting these numbers</div>
+          There are no real <em>good-deal / bad-deal</em> labels yet, so the model is trained on a target <b>synthesized from Kauvery's rubric</b> plus noise. The metrics above measure how faithfully it reproduces that rubric — <b>not</b> real-world correctness. It is a consistent, explainable POC scorer. Real accuracy is unlocked when biomedical leads label ~30–50 real outcomes (or the 👍/👎 feedback accumulates), the target is swapped, and the model is retrained — at which point it can improve <em>past</em> the hand-tuned rubric.
+        </div>
+        <p><strong>How to check accuracy in the cx environment:</strong> MAE / R² / verdict-accuracy / gap-recall are logged to an MLflow experiment every training run (Experiments → the <code>capex_worth_it</code> run → Metrics). Treat them as a training sanity check until real labels replace the synthetic target.</p>
+      </section>
+
+      <section id="data">
+        <div class="sec-h"><span class="num">08</span><h2>Data &amp; governance</h2></div>
+        <h3>Required input data</h3>
+        <p>The whole system depends on a governed history table with these columns (renamed to match if needed):</p>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Table</th><th>Required columns</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">&lt;catalog&gt;.&lt;schema&gt;.<br>extracted_pdf_datas</td><td class="mono">unit_rate · po_date · model_no · make_brand · po_number · unit_name · warranty_months · amc_value · camc_value · foc_details · special_instructions · source_file_name</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>Security &amp; governance</h3>
+        <ul>
+          <li><strong>Auth:</strong> all tool calls run as the app <strong>service principal</strong>, granted only what it needs — <code>USE CATALOG/SCHEMA</code>, <code>SELECT</code> on the history table, <code>EXECUTE</code> on the functions, <code>READ/WRITE</code> on the landing volume, <code>CAN_QUERY</code> on the endpoints, <code>CAN_USE</code> on the warehouse.</li>
+          <li><strong>Data residency:</strong> extraction and inference use Databricks-hosted Foundation Models — data does not leave the workspace to any external provider.</li>
+          <li><strong>Governance:</strong> the model is a versioned Unity Catalog asset with lineage; the scoring functions are UC-governed SQL.</li>
+          <li><strong>Retention:</strong> quotations are not stored beyond the review; only per-user history (7 days) and the final decision + feedback persist in Lakebase.</li>
+        </ul>
+      </section>
+
+      <section id="success">
+        <div class="sec-h"><span class="num">09</span><h2>Success metrics</h2></div>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Dimension</th><th>POC signal</th><th>Target as it scales</th></tr></thead>
+            <tbody>
+              <tr><td>Adoption</td><td>Reviews run per week</td><td>Majority of CAPEX quotes reviewed in-tool</td></tr>
+              <tr><td>Reviewer trust</td><td>👍 rate on the Monitor page</td><td>&gt; 80% helpful</td></tr>
+              <tr><td>Speed</td><td>Minutes → seconds per quote</td><td>Full review &lt; 60s</td></tr>
+              <tr><td>Leverage</td><td>Gaps + comparables surfaced per review</td><td>Measurable savings on negotiated quotes</td></tr>
+              <tr><td>Model quality</td><td>MAE / verdict accuracy (vs rubric)</td><td>Retrained on real outcomes; accuracy vs reality</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="risks">
+        <div class="sec-h"><span class="num">10</span><h2>Risks &amp; mitigations</h2></div>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Risk</th><th>Sev</th><th>Mitigation</th></tr></thead>
+            <tbody>
+              <tr><td>Service-principal UC grants missing on install → permission errors</td><td><span class="sev high">High</span></td><td>Grant the 8 UC permissions at install (fold into the installer); verify with <code>SHOW GRANTS</code>.</td></tr>
+              <tr><td>Lakebase host/endpoint mis-pointed → history silently off</td><td><span class="sev high">High</span></td><td>Set <code>LAKEBASE_ENDPOINT</code>/<code>PGHOST</code> per env; remove the stale hardcoded default.</td></tr>
+              <tr><td>Extraction FM not available in region (<code>ai_query</code> json)</td><td><span class="sev high">High</span></td><td>Preflight-check the FM endpoints; pick a Llama/GPT that exists in the workspace.</td></tr>
+              <tr><td><code>extracted_pdf_datas</code> columns / date format differ</td><td><span class="sev med">Med</span></td><td>Preflight column + format check; fail loudly with guidance.</td></tr>
+              <tr><td>Model trained on synthetic target, not real outcomes</td><td><span class="sev med">Med</span></td><td>Set expectations; collect labels via feedback; retrain on real outcomes.</td></tr>
+              <tr><td>SDK version drift (e.g. Files API upload)</td><td><span class="sev low">Low</span></td><td>Upload via raw Files API PUT (bypasses SDK helper); pin SDK when hardening.</td></tr>
+              <tr><td>Egress / Private Link for the apps domain</td><td><span class="sev low">Low</span></td><td>Allowlist PyPI + a Private DNS zone for <code>*.azure.databricksapps.com</code>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="roadmap">
+        <div class="sec-h"><span class="num">11</span><h2>Roadmap &amp; open questions</h2></div>
+        <h3>Beyond the POC</h3>
+        <ul>
+          <li><strong>Real-outcome labels</strong> → retrain the scorer on actual post-purchase results (the single biggest quality lever).</li>
+          <li><strong>Hardened one-click installer</strong> — auto-grant the SP, derive Lakebase config, preflight FM + data checks.</li>
+          <li><strong>Contract-clause analysis</strong> (Vector Search over spec/contract text) for risks no checklist anticipates.</li>
+          <li><strong>Excel export</strong> of the comparison sheet; review-queue workflow.</li>
+          <li><strong>Admin gating</strong> of the Monitor page if required (currently open to all signed-in users).</li>
+        </ul>
+        <h3>Open questions</h3>
+        <ul>
+          <li>Who owns labeling real outcomes, and on what cadence?</li>
+          <li>Which units/categories to prioritize for the first production rollout?</li>
+          <li>Should the negotiation ask be editable/exportable before sending to a vendor?</li>
+        </ul>
+      </section>
+    </main>
+  </div>
+
+  <div class="foot">
+    <span>CAPEX Copilot — Product Requirements (POC) · build v2_22</span>
+    <span>Kauvery Hospital × Databricks · 22 Sep 2026</span>
+  </div>
+</div>
